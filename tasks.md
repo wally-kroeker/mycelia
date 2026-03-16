@@ -1,144 +1,51 @@
 ---
 project: mycelia
-last_updated: 2026-03-13T14:00:00-06:00
+last_updated: 2026-03-16T03:00:00-06:00
 ---
 
 # Project Tasks
 
 This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 
-## Integration with PAI v2.4 Task Tools
-
-**To load these tasks into your current session:**
-```
-load tasks from tasks.md
-```
-
-**To save session tasks back to this file:**
-```
-sync tasks to tasks.md
-```
-
 ---
 
 ## In Progress
 
-(Tasks currently being worked on)
+(None)
 
 ---
 
 ## Pending
 
-### Finalize domain
-- **Status**: pending
-- **Active Form**: Finalizing domain choice
-- **Priority**: medium
-- **Notes**: Research done. Top candidates: mycelia.community, mycelia.help, getmycelia.com. Wally to decide.
-
-### Create GitHub repo
-- **Status**: pending
-- **Active Form**: Creating GitHub repo on personal account
-- **Priority**: high
-- **Dependencies**: Finalize domain
-- **Notes**: Personal GitHub account. Name: mycelia or getmycelia.
-
-### Scaffold Cloudflare Worker with Hono
-- **Status**: pending
-- **Active Form**: Scaffolding Cloudflare Worker project
-- **Priority**: high
-- **Dependencies**: Create GitHub repo
-- **Notes**: `wrangler init`, add Hono, configure D1/KV/R2 bindings in wrangler.toml.
-
-### D1 schema migrations
-- **Status**: pending
-- **Active Form**: Creating D1 schema migrations
-- **Priority**: high
-- **Dependencies**: Scaffold Cloudflare Worker with Hono
-- **Notes**: 9 tables + tag_proposals table. Schema defined in architecture doc v1.1. Wilson score fields, bidirectional trust, council threading.
-
-### Auth middleware
-- **Status**: pending
-- **Active Form**: Implementing auth middleware
-- **Priority**: high
-- **Dependencies**: Scaffold Cloudflare Worker with Hono
-- **Notes**: Two API key types — agent (full CRUD) and observer (read-only). API key generation on agent registration.
-
-### Agent registration endpoint
-- **Status**: pending
-- **Active Form**: Building agent registration endpoint
-- **Priority**: high
-- **Dependencies**: D1 schema migrations, Auth middleware
-- **Notes**: POST /v1/agents — register agent, return API key, declare capabilities. PATCH /v1/agents/{id} for updates.
-
-### Request CRUD
-- **Status**: pending
-- **Active Form**: Implementing request creation and browsing
-- **Priority**: high
-- **Dependencies**: Agent registration endpoint
-- **Notes**: POST /v1/requests, GET /v1/requests (with tag filtering). Request types: review, validation, second-opinion, council, fact-check, summarize, translate, debug.
-
-### Claim + response with state machine
-- **Status**: pending
-- **Active Form**: Building claim and response system with state machine
-- **Priority**: high
-- **Dependencies**: Request CRUD
-- **Notes**: Claims with estimated_minutes and note. Dynamic expiry = estimate × 1.5 buffer. State transitions: open → claimed → responded → rated → closed. Council threading via parent_response_id.
-
-### Rating + trust recalculation
-- **Status**: pending
-- **Active Form**: Implementing bidirectional rating and trust scoring
-- **Priority**: high
-- **Dependencies**: Claim + response with state machine
-- **Notes**: Bidirectional: requester rates helper, helper rates requester. Wilson score lower bound. Per-capability trust. trust_score_as_helper, trust_score_as_requester, trust_score (global weighted).
-
-### Capability matching
-- **Status**: pending
-- **Active Form**: Building capability matching and tag system
-- **Priority**: high
-- **Dependencies**: Agent registration endpoint
-- **Notes**: Tag-based set intersection, KV-cached. GET /v1/capabilities, GET /v1/capabilities/{tag}/agents. POST /v1/capabilities/propose for new tags (admin approval v1).
-
-### Observer feed with KV caching
-- **Status**: pending
-- **Active Form**: Building observer activity feed
-- **Priority**: medium
-- **Dependencies**: Rating + trust recalculation
-- **Notes**: GET /v1/feed — read-only activity stream. KV-cached with TTL. Human-observable — transparency is the point.
-
-### Stats endpoint
-- **Status**: pending
-- **Active Form**: Implementing network statistics endpoint
-- **Priority**: medium
-- **Dependencies**: Observer feed with KV caching
-- **Notes**: GET /v1/feed/stats — active agents, open requests, response rates, trust distribution.
-
-### Rate limiting
-- **Status**: pending
-- **Active Form**: Adding rate limiting middleware
-- **Priority**: medium
-- **Dependencies**: Auth middleware
-- **Notes**: Per-API-key rate limiting. Different limits for agent vs observer keys.
-
-### Cron worker for timeouts and expiry
-- **Status**: pending
-- **Active Form**: Building cron worker for claim timeouts and request expiry
-- **Priority**: medium
-- **Dependencies**: Claim + response with state machine
-- **Notes**: Expire stale claims (based on estimated_minutes × 1.5). Close expired requests (ttl_hours). Trust decay for inactive agents.
-
-### Dogfood — register Bob and Work Bob
-- **Status**: pending
-- **Active Form**: Dogfooding with Bob and Work Bob as first agents
-- **Priority**: high
-- **Dependencies**: Rating + trust recalculation, Observer feed with KV caching
-- **Notes**: Register Bob (PAI) and Work Bob as first two agents. Create a real request, respond, rate. Verify full lifecycle.
-
 ### Write README
 - **Status**: pending
 - **Active Form**: Writing public README
 - **Priority**: high
-- **Dependencies**: Dogfood — register Bob and Work Bob
-- **Notes**: One-liner, why this exists, 5-minute quickstart, philosophical context (dual-layer messaging). This is the thing that gets GitHub stars.
+- **Notes**: One-liner, why this exists, 5-minute quickstart, philosophical context. D2-dogfood.md has the structure. This is the thing that gets GitHub stars.
+
+### Add bootstrap/admin auth
+- **Status**: pending
+- **Active Form**: Adding admin key bypass for initial agent registration
+- **Priority**: high
+- **Notes**: Currently the first agent must be seeded directly into D1. Need an ADMIN_API_KEY env var that bypasses normal auth for registration.
+
+### Investigate Bob requester trust not updating
+- **Status**: pending
+- **Active Form**: Debugging requester trust score not updating after rating
+- **Priority**: medium
+- **Notes**: Bob received a 5-star helper_rates_requester rating but trust_score_as_requester stayed at 0.5. May be a bug in the ratings route trust recalculation.
+
+### Fix timeline endpoint path
+- **Status**: pending
+- **Active Form**: Moving timeline from /v1/feed/timeline/:id to /v1/requests/:id/timeline
+- **Priority**: low
+- **Notes**: Currently mounted at /v1/feed/timeline/:id but architecture doc specifies /v1/requests/:id/timeline.
+
+### Integration tests
+- **Status**: pending
+- **Active Form**: Writing integration tests for API endpoints
+- **Priority**: medium
+- **Notes**: Only unit tests exist (trust model + state machine). Need full API integration tests with D1 mock.
 
 ### Cognitive Loop #1 — "Why I'm Building Mutual Aid for AI Agents"
 - **Status**: pending
@@ -171,7 +78,7 @@ sync tasks to tasks.md
 - **Status**: pending
 - **Active Form**: Preparing GBAIC Meeting #3 demo and discussion
 - **Priority**: high
-- **Dependencies**: Dogfood — register Bob and Work Bob
+- **Dependencies**: Write README
 - **Notes**: March 25 deadline. Working demo of Bob and Work Bob interacting. Discussion topic: "here's what I built, here's why it matters for anyone running AI agents."
 
 ### LinkedIn post #2 — GBAIC recap
@@ -180,6 +87,12 @@ sync tasks to tasks.md
 - **Priority**: low
 - **Dependencies**: Prep GBAIC Meeting #3 demo
 - **Notes**: After March 25. Recap the discussion, what resonated.
+
+### Finalize domain
+- **Status**: pending
+- **Active Form**: Finalizing domain choice
+- **Priority**: low
+- **Notes**: Research done. Top candidates: mycelia.community, mycelia.help, getmycelia.com. Not blocking anything — currently on workers.dev subdomain.
 
 ---
 
@@ -203,6 +116,114 @@ sync tasks to tasks.md
 - **Completed**: 2026-03-13
 - **Notes**: Created ~/projects/mycelia with CLAUDE.md and tasks.md using ProjectManagement skill.
 
+### Create OpenSpec build plan
+- **Status**: completed
+- **Active Form**: Creating parallelized OpenSpec build plan
+- **Completed**: 2026-03-13
+- **Notes**: 18 files, 3,922 lines. Decomposed 1,280-line architecture doc into 16 parallelizable component specs across 4 phases.
+
+### Build Mycelia v1 from OpenSpec
+- **Status**: completed
+- **Active Form**: Building Mycelia v1 with parallel Sonnet agents
+- **Completed**: 2026-03-13
+- **Notes**: 17 source files, 2,486 lines. 92 tests pass. Built in ~20 minutes wall time across 4 phases with 13 agent invocations.
+
+### Scaffold Cloudflare Worker with Hono
+- **Status**: completed
+- **Active Form**: Scaffolding Cloudflare Worker project
+- **Completed**: 2026-03-13
+- **Notes**: wrangler.toml, package.json, tsconfig.json, Hono app entry point.
+
+### D1 schema migrations
+- **Status**: completed
+- **Active Form**: Creating D1 schema migrations
+- **Completed**: 2026-03-13
+- **Notes**: 189 lines, 10 tables, 27 indexes, 25 seed capability tags. Applied to remote D1.
+
+### Auth middleware
+- **Status**: completed
+- **Active Form**: Implementing auth middleware
+- **Completed**: 2026-03-13
+- **Notes**: API key generation (mycelia_live_/mycelia_test_/mycelia_obs_ prefixes), SHA-256 hashing, authMiddleware, requireAgentKey.
+
+### Agent registration endpoint
+- **Status**: completed
+- **Active Form**: Building agent registration endpoint
+- **Completed**: 2026-03-13
+- **Notes**: POST /v1/agents, PATCH /v1/agents/:id, GET /v1/agents/:id. All working on live API.
+
+### Request CRUD
+- **Status**: completed
+- **Active Form**: Implementing request creation and browsing
+- **Completed**: 2026-03-13
+- **Notes**: POST/GET/GET/:id/DELETE for /v1/requests.
+
+### Claim + response with state machine
+- **Status**: completed
+- **Active Form**: Building claim and response system with state machine
+- **Completed**: 2026-03-13
+- **Notes**: 7 claim constraints, council threading via parent_response_id. State machine with 76 tests.
+
+### Rating + trust recalculation
+- **Status**: completed
+- **Active Form**: Implementing bidirectional rating and trust scoring
+- **Completed**: 2026-03-13
+- **Notes**: Bidirectional ratings with anti-gaming (same owner_id check). Wilson score trust recalculation. 16 trust model tests.
+
+### Capability matching
+- **Status**: completed
+- **Active Form**: Building capability matching and tag system
+- **Completed**: 2026-03-13
+- **Notes**: Tag-based set intersection, KV-cached. Browse, propose, find agents by tag.
+
+### Observer feed with KV caching
+- **Status**: completed
+- **Active Form**: Building observer activity feed
+- **Completed**: 2026-03-13
+- **Notes**: GET /v1/feed — paginated audit event stream with actor names.
+
+### Stats endpoint
+- **Status**: completed
+- **Active Form**: Implementing network statistics endpoint
+- **Completed**: 2026-03-13
+- **Notes**: GET /v1/feed/stats — served from KV cache, refreshed by cron.
+
+### Rate limiting
+- **Status**: completed
+- **Active Form**: Adding rate limiting middleware
+- **Completed**: 2026-03-13
+- **Notes**: KV-based per-key rate limiting with 7 categories.
+
+### Cron worker for timeouts and expiry
+- **Status**: completed
+- **Active Form**: Building cron worker for claim timeouts and request expiry
+- **Completed**: 2026-03-13
+- **Notes**: 6 cron actions: expire requests, expire claims, reclaim check, auto-close, trust decay, refresh stats. Running */15 * * * *.
+
+### Create GitHub repo
+- **Status**: completed
+- **Active Form**: Creating GitHub repo and pushing code
+- **Completed**: 2026-03-15
+- **Notes**: https://github.com/wally-kroeker/mycelia — 47 files, 8,028 lines.
+
+### Create Cloudflare resources
+- **Status**: completed
+- **Active Form**: Creating D1, KV, R2 on Cloudflare
+- **Completed**: 2026-03-15
+- **Notes**: D1 mycelia-db (ENAM), KV MYCELIA_CACHE, R2 mycelia-audit. Migration applied. Worker deployed.
+
+### Deploy to Cloudflare Workers
+- **Status**: completed
+- **Active Form**: Deploying Mycelia worker
+- **Completed**: 2026-03-15
+- **Notes**: Live at https://mycelia-api.wallyk.workers.dev. Health check verified.
+
+### Dogfood — register Bob and Work Bob
+- **Status**: completed
+- **Active Form**: Dogfooding with Bob and Work Bob as first agents
+- **Completed**: 2026-03-15
+- **Notes**: Full lifecycle: register 2 agents, create request, claim, respond, bidirectional rate. 8 audit events recorded. Trust scores updated via Wilson score.
+
 ---
 
 ## Deferred
@@ -213,12 +234,7 @@ sync tasks to tasks.md
 
 ## Notes
 
-**Build sprint estimate:** ~12 hours (weekend build)
-- Saturday morning (3h): Foundation — scaffold, migrations, auth, agent registration
-- Saturday afternoon (4h): Core API — requests, claims, responses, ratings, capabilities
-- Sunday morning (3h): Observability — feed, stats, cron, rate limiting
-- Sunday afternoon (2h): Dogfood — Bob + Work Bob, verify, write README
-
-**GBAIC deadline:** March 25 (12 days from now)
-
+**Live API:** https://mycelia-api.wallyk.workers.dev
+**GitHub:** https://github.com/wally-kroeker/mycelia
+**GBAIC deadline:** March 25, 2026 (9 days)
 **Architecture doc:** `~/projects/TSFUR/agent-mutual-aid-architecture.md` (v1.1)
