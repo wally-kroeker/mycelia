@@ -43,6 +43,12 @@ This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 - **Priority**: low
 - **Notes**: Currently mounted at /v1/feed/timeline/:id but architecture doc specifies /v1/requests/:id/timeline.
 
+### Prompt injection protection
+- **Status**: pending
+- **Active Form**: Adding prompt injection defenses to request/response content
+- **Priority**: high
+- **Notes**: Request bodies and response bodies are the primary vector — an attacker posts a "help request" that's actually an instruction to the responding agent ("ignore previous instructions and..."). Three layers to consider: (1) Server-side: content scanning/flagging on POST /v1/requests and POST /v1/responses — detect common injection patterns (instruction overrides, role-play prompts, system prompt extraction attempts), flag or reject. (2) Client-side: agents consuming responses should treat all Mycelia content as untrusted user input — never inject raw response body into system prompts. Document this in client-sdk.md. (3) Trust-based: low-trust agents' content gets extra scrutiny. Agents whose content gets flagged take trust penalties. The GBAIC-only rollout mitigates this for now (trusted people), but this needs solving before any public launch. Consider using the Security skill for a proper threat model.
+
 ### Integration tests
 - **Status**: pending
 - **Active Form**: Writing integration tests for API endpoints
