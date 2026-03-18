@@ -1,6 +1,6 @@
 ---
 project: mycelia
-last_updated: 2026-03-16T03:00:00-06:00
+last_updated: 2026-03-17T00:00:00-06:00
 ---
 
 # Project Tasks
@@ -17,17 +17,19 @@ This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 
 ## Pending
 
-### Write README
+### Deploy GBAIC bot with Mycelia commands
 - **Status**: pending
-- **Active Form**: Writing public README
+- **Active Form**: Deploying GBAIC bot update with Mycelia slash commands
 - **Priority**: high
-- **Notes**: One-liner, why this exists, 5-minute quickstart, philosophical context. D2-dogfood.md has the structure. This is the thing that gets GitHub stars.
+- **Due**: 2026-03-24
+- **Notes**: Bot code is written (6 slash commands in gbaic-bot/src/cogs/mycelia.py). Needs: deploy to container 116, add MYCELIA_API_KEY to .env, test all commands. See GBAIC/docs/MYCELIA-IMPLEMENTATION-SPEC.md.
 
-### Add bootstrap/admin auth
+### Prep GBAIC Meeting #3 demo
 - **Status**: pending
-- **Active Form**: Adding admin key bypass for initial agent registration
+- **Active Form**: Preparing live Mycelia demo for GBAIC Meeting #3
 - **Priority**: high
-- **Notes**: Currently the first agent must be seeded directly into D1. Need an ADMIN_API_KEY env var that bypasses normal auth for registration.
+- **Due**: 2026-03-25
+- **Notes**: Live demo: member registers agent via /mycelia register, Bob or Work Bob claims and responds, trust scores update in real time. Rehearse before meeting.
 
 ### Investigate Bob requester trust not updating
 - **Status**: pending
@@ -74,12 +76,6 @@ This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 - **Dependencies**: Add project page to wallykroeker.com
 - **Notes**: Short version for GBAIC/professional audience. Points to wallykroeker.com.
 
-### Prep GBAIC Meeting #3 demo
-- **Status**: pending
-- **Active Form**: Preparing GBAIC Meeting #3 demo and discussion
-- **Priority**: high
-- **Dependencies**: Write README
-- **Notes**: March 25 deadline. Working demo of Bob and Work Bob interacting. Discussion topic: "here's what I built, here's why it matters for anyone running AI agents."
 
 ### LinkedIn post #2 — GBAIC recap
 - **Status**: pending
@@ -224,6 +220,36 @@ This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 - **Completed**: 2026-03-15
 - **Notes**: Full lifecycle: register 2 agents, create request, claim, respond, bidirectional rate. 8 audit events recorded. Trust scores updated via Wilson score.
 
+### Write README
+- **Status**: completed
+- **Active Form**: Writing public README
+- **Completed**: 2026-03-16
+- **Notes**: 293 lines. Protocol positioning, ASCII cooperation diagram, quickstart, trust model table, agent-agnostic integration, Kropotkin quote. Optimized for GitHub engagement.
+
+### Build Mycelia PAI skill and CLI client
+- **Status**: completed
+- **Active Form**: Building agent-agnostic Mycelia client skill
+- **Completed**: 2026-03-16
+- **Notes**: SKILL.md + Tools/MyceliaClient.ts (10 commands). Flexible config discovery. Tested by Work Bob on Copilot CLI (Node 22). Pushed to repo as scripts/MyceliaClient.ts.
+
+### Agent-agnostic client SDK docs
+- **Status**: completed
+- **Active Form**: Writing integration guide for any agent platform
+- **Completed**: 2026-03-16
+- **Notes**: docs/client-sdk.md — 3 connection methods (raw HTTP, TypeScript client, build your own), registration docs, response format.
+
+### GBAIC Discord bot Mycelia integration
+- **Status**: completed
+- **Active Form**: Adding Mycelia slash commands to GBAIC Discord bot
+- **Completed**: 2026-03-16
+- **Notes**: 6 slash commands (register, browse, profile, feed, stats, unregister). 698-line cog. Discord membership = trust boundary. API keys sent via DM in spoiler tags. Built by Work Bob. Needs deployment to container 116.
+
+### First real cross-agent work request
+- **Status**: completed
+- **Active Form**: Processing real work through Mycelia
+- **Completed**: 2026-03-16
+- **Notes**: Work Bob posted Tomcat 9 security remediation review. Bob claimed, reviewed, responded with 6 caveats. First real cross-platform (Claude Code + Copilot CLI) cooperation through the protocol.
+
 ---
 
 ## Deferred
@@ -236,5 +262,6 @@ This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 
 **Live API:** https://mycelia-api.wallyk.workers.dev
 **GitHub:** https://github.com/wally-kroeker/mycelia
-**GBAIC deadline:** March 25, 2026 (9 days)
+**GBAIC deadline:** March 25, 2026
+**GBAIC Discord bot:** GBAIC/gbaic-bot/src/cogs/mycelia.py (ready, needs deploy)
 **Architecture doc:** `~/projects/TSFUR/agent-mutual-aid-architecture.md` (v1.1)

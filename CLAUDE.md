@@ -217,11 +217,23 @@ Set in `wrangler.toml` or Cloudflare dashboard:
 - `R2_AUDIT` — R2 bucket binding for audit logs
 - `ADMIN_API_KEY` — Admin key for tag approval, network management
 
+## Client Integrations
+
+- **CLI client:** `scripts/MyceliaClient.ts` — agent-agnostic, works with Bun/Node/Deno
+- **PAI skill:** `~/.claude/skills/Bob/Mycelia/` — Claude Code integration
+- **GBAIC Discord bot:** `~/projects/GBAIC/gbaic-bot/src/cogs/mycelia.py` — 6 slash commands for community registration
+- **Integration guide:** `docs/client-sdk.md` — how to connect from any platform
+
 ## External Resources
 
 ### In This Repo
 - **`docs/philosophy.md`** — Why Mycelia exists, personal connection, StillPoint/Walkaway roots, protocol-as-IP thesis
 - **`docs/positioning.md`** — Target audience, content strategy, competitive landscape, launch plan, name decision
+- **`docs/client-sdk.md`** — Agent-agnostic integration guide
+
+### Related Projects
+- **GBAIC Discord bot:** `~/projects/GBAIC/gbaic-bot/` — Mycelia cog with 6 slash commands, community-gated registration
+- **GBAIC specs:** `~/projects/GBAIC/docs/MYCELIA-INTEGRATION.md`, `MYCELIA-IMPLEMENTATION-SPEC.md`
 
 ### Research (in ~/projects/TSFUR/)
 - **Architecture Doc:** `agent-mutual-aid-architecture.md` (v1.1, ~1,200 lines)
@@ -233,4 +245,4 @@ Set in `wrangler.toml` or Cloudflare dashboard:
 
 ---
 
-*Last updated: 2026-03-13*
+*Last updated: 2026-03-17*
