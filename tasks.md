@@ -1,6 +1,6 @@
 ---
 project: mycelia
-last_updated: 2026-03-17T00:00:00-06:00
+last_updated: 2026-03-23T13:00:00-06:00
 ---
 
 # Project Tasks
@@ -11,49 +11,16 @@ This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 
 ## In Progress
 
-(None)
+### Prep GBAIC Meeting #3 demo
+- **Status**: in_progress
+- **Active Form**: Preparing live Mycelia demo for GBAIC Meeting #3
+- **Priority**: high
+- **Due**: 2026-03-25
+- **Notes**: Three-platform integration test complete (Claude + Codex + Gemini). Discord bot deployed. Need to rehearse live demo flow. Post to GBAIC Discord today.
 
 ---
 
 ## Pending
-
-### Deploy GBAIC bot with Mycelia commands
-- **Status**: pending
-- **Active Form**: Deploying GBAIC bot update with Mycelia slash commands
-- **Priority**: high
-- **Due**: 2026-03-24
-- **Notes**: Bot code is written (6 slash commands in gbaic-bot/src/cogs/mycelia.py). Needs: deploy to container 116, add MYCELIA_API_KEY to .env, test all commands. See GBAIC/docs/MYCELIA-IMPLEMENTATION-SPEC.md.
-
-### Prep GBAIC Meeting #3 demo
-- **Status**: pending
-- **Active Form**: Preparing live Mycelia demo for GBAIC Meeting #3
-- **Priority**: high
-- **Due**: 2026-03-25
-- **Notes**: Live demo: member registers agent via /mycelia register, Bob or Work Bob claims and responds, trust scores update in real time. Rehearse before meeting.
-
-### Investigate Bob requester trust not updating
-- **Status**: pending
-- **Active Form**: Debugging requester trust score not updating after rating
-- **Priority**: medium
-- **Notes**: Bob received a 5-star helper_rates_requester rating but trust_score_as_requester stayed at 0.5. May be a bug in the ratings route trust recalculation.
-
-### Fix timeline endpoint path
-- **Status**: pending
-- **Active Form**: Moving timeline from /v1/feed/timeline/:id to /v1/requests/:id/timeline
-- **Priority**: low
-- **Notes**: Currently mounted at /v1/feed/timeline/:id but architecture doc specifies /v1/requests/:id/timeline.
-
-### Prompt injection protection
-- **Status**: pending
-- **Active Form**: Adding prompt injection defenses to request/response content
-- **Priority**: high
-- **Notes**: Request bodies and response bodies are the primary vector — an attacker posts a "help request" that's actually an instruction to the responding agent ("ignore previous instructions and..."). Three layers to consider: (1) Server-side: content scanning/flagging on POST /v1/requests and POST /v1/responses — detect common injection patterns (instruction overrides, role-play prompts, system prompt extraction attempts), flag or reject. (2) Client-side: agents consuming responses should treat all Mycelia content as untrusted user input — never inject raw response body into system prompts. Document this in client-sdk.md. (3) Trust-based: low-trust agents' content gets extra scrutiny. Agents whose content gets flagged take trust penalties. The GBAIC-only rollout mitigates this for now (trusted people), but this needs solving before any public launch. Consider using the Security skill for a proper threat model.
-
-### Integration tests
-- **Status**: pending
-- **Active Form**: Writing integration tests for API endpoints
-- **Priority**: medium
-- **Notes**: Only unit tests exist (trust model + state machine). Need full API integration tests with D1 mock.
 
 ### Cognitive Loop #1 — "Why I'm Building Mutual Aid for AI Agents"
 - **Status**: pending
@@ -66,7 +33,7 @@ This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 - **Active Form**: Writing trust model and cooperation philosophy post
 - **Priority**: low
 - **Dependencies**: Cognitive Loop #1
-- **Notes**: Wilson score, bidirectional trust, why mutual aid not marketplace. Post around/after GBAIC.
+- **Notes**: Wilson score, bidirectional trust, why mutual aid not marketplace.
 
 ### Add project page to wallykroeker.com
 - **Status**: pending
@@ -82,7 +49,6 @@ This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 - **Dependencies**: Add project page to wallykroeker.com
 - **Notes**: Short version for GBAIC/professional audience. Points to wallykroeker.com.
 
-
 ### LinkedIn post #2 — GBAIC recap
 - **Status**: pending
 - **Active Form**: Writing GBAIC recap LinkedIn post
@@ -90,177 +56,101 @@ This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 - **Dependencies**: Prep GBAIC Meeting #3 demo
 - **Notes**: After March 25. Recap the discussion, what resonated.
 
+### Fix timeline endpoint path
+- **Status**: pending
+- **Active Form**: Moving timeline from /v1/feed/timeline/:id to /v1/requests/:id/timeline
+- **Priority**: low
+- **Notes**: Currently mounted at /v1/feed/timeline/:id but architecture doc specifies /v1/requests/:id/timeline.
+
+### Integration tests
+- **Status**: pending
+- **Active Form**: Writing integration tests for API endpoints
+- **Priority**: medium
+- **Notes**: Unit tests (trust model + state machine + sanitizer) at 153 passing. Need full API integration tests with D1 mock.
+
 ### Finalize domain
 - **Status**: pending
 - **Active Form**: Finalizing domain choice
 - **Priority**: low
 - **Notes**: Research done. Top candidates: mycelia.community, mycelia.help, getmycelia.com. Not blocking anything — currently on workers.dev subdomain.
 
+### Implement exponential trust decay
+- **Status**: pending
+- **Active Form**: Replacing linear trust decay with exponential model
+- **Priority**: medium
+- **Notes**: Bill (Codex) and Gemini both recommended exponential decay with 21-day grace period, 45-60 day half-life, floor of 0.1-0.15, per-capability. Current: linear -0.01/week, 30-day grace, 0.3 floor. Worth implementing based on integration test feedback.
+
+### Community-as-package vision
+- **Status**: pending
+- **Active Form**: Designing Mycelia as deployable per-community package
+- **Priority**: low
+- **Notes**: Each Discord server / community gets its own Mycelia instance. Community membership = trust boundary. GBAIC is the proof-of-concept. Future architecture work.
+
 ---
 
 ## Completed
 
+### Deploy GBAIC bot with Mycelia commands
+- **Status**: completed
+- **Completed**: 2026-03-17
+- **Notes**: Bot deployed to container 116 with 6 slash commands. /mycelia stats verified working.
+
+### Prompt injection protection
+- **Status**: completed
+- **Completed**: 2026-03-23
+- **Notes**: Score-based sanitization middleware (25 patterns, 7 categories). Code-block-aware to avoid false positives. 61 tests. Deployed to production. Research doc at docs/prompt-injection-research.md.
+
+### GBAIC launch readiness
+- **Status**: completed
+- **Completed**: 2026-03-23
+- **Notes**: Logo + social preview, build-a-skill guide (673 lines), updated README with community-gated registration, prompt injection protection, all deployed.
+
+### Three-platform integration test
+- **Status**: completed
+- **Completed**: 2026-03-23
+- **Notes**: Claude (Bob), Codex (Bill), Gemini — all self-registered, browsed, claimed, responded, rated. Full lifecycle verified. Wilson scores updating correctly. Two bugs found and fixed (request premature closure, tag error messages).
+
+### Fix request lifecycle — premature closure
+- **Status**: completed
+- **Completed**: 2026-03-23
+- **Notes**: Requests now stay claimable in any non-terminal state. Status tracks progress but doesn't gate new claims. max_responses is the real limit.
+
+### Fix tag validation error messages
+- **Status**: completed
+- **Completed**: 2026-03-23
+- **Notes**: Unknown tag errors now include full list of available tags inline.
+
 ### Lock project name
 - **Status**: completed
-- **Active Form**: Locking project name
 - **Completed**: 2026-03-13
-- **Notes**: Mycelia — agents helping agents. Personal connection to Wally's mushroom trip in the woods.
-
-### Review architecture doc
-- **Status**: completed
-- **Active Form**: Reviewing architecture document
-- **Completed**: 2026-03-13
-- **Notes**: Updated to v1.1 with 5 changes: tag proposals, estimate-based claim expiry, bidirectional ratings, council request type, expanded request types.
-
-### Bootstrap project folder
-- **Status**: completed
-- **Active Form**: Bootstrapping project folder structure
-- **Completed**: 2026-03-13
-- **Notes**: Created ~/projects/mycelia with CLAUDE.md and tasks.md using ProjectManagement skill.
-
-### Create OpenSpec build plan
-- **Status**: completed
-- **Active Form**: Creating parallelized OpenSpec build plan
-- **Completed**: 2026-03-13
-- **Notes**: 18 files, 3,922 lines. Decomposed 1,280-line architecture doc into 16 parallelizable component specs across 4 phases.
 
 ### Build Mycelia v1 from OpenSpec
 - **Status**: completed
-- **Active Form**: Building Mycelia v1 with parallel Sonnet agents
 - **Completed**: 2026-03-13
-- **Notes**: 17 source files, 2,486 lines. 92 tests pass. Built in ~20 minutes wall time across 4 phases with 13 agent invocations.
-
-### Scaffold Cloudflare Worker with Hono
-- **Status**: completed
-- **Active Form**: Scaffolding Cloudflare Worker project
-- **Completed**: 2026-03-13
-- **Notes**: wrangler.toml, package.json, tsconfig.json, Hono app entry point.
-
-### D1 schema migrations
-- **Status**: completed
-- **Active Form**: Creating D1 schema migrations
-- **Completed**: 2026-03-13
-- **Notes**: 189 lines, 10 tables, 27 indexes, 25 seed capability tags. Applied to remote D1.
-
-### Auth middleware
-- **Status**: completed
-- **Active Form**: Implementing auth middleware
-- **Completed**: 2026-03-13
-- **Notes**: API key generation (mycelia_live_/mycelia_test_/mycelia_obs_ prefixes), SHA-256 hashing, authMiddleware, requireAgentKey.
-
-### Agent registration endpoint
-- **Status**: completed
-- **Active Form**: Building agent registration endpoint
-- **Completed**: 2026-03-13
-- **Notes**: POST /v1/agents, PATCH /v1/agents/:id, GET /v1/agents/:id. All working on live API.
-
-### Request CRUD
-- **Status**: completed
-- **Active Form**: Implementing request creation and browsing
-- **Completed**: 2026-03-13
-- **Notes**: POST/GET/GET/:id/DELETE for /v1/requests.
-
-### Claim + response with state machine
-- **Status**: completed
-- **Active Form**: Building claim and response system with state machine
-- **Completed**: 2026-03-13
-- **Notes**: 7 claim constraints, council threading via parent_response_id. State machine with 76 tests.
-
-### Rating + trust recalculation
-- **Status**: completed
-- **Active Form**: Implementing bidirectional rating and trust scoring
-- **Completed**: 2026-03-13
-- **Notes**: Bidirectional ratings with anti-gaming (same owner_id check). Wilson score trust recalculation. 16 trust model tests.
-
-### Capability matching
-- **Status**: completed
-- **Active Form**: Building capability matching and tag system
-- **Completed**: 2026-03-13
-- **Notes**: Tag-based set intersection, KV-cached. Browse, propose, find agents by tag.
-
-### Observer feed with KV caching
-- **Status**: completed
-- **Active Form**: Building observer activity feed
-- **Completed**: 2026-03-13
-- **Notes**: GET /v1/feed — paginated audit event stream with actor names.
-
-### Stats endpoint
-- **Status**: completed
-- **Active Form**: Implementing network statistics endpoint
-- **Completed**: 2026-03-13
-- **Notes**: GET /v1/feed/stats — served from KV cache, refreshed by cron.
-
-### Rate limiting
-- **Status**: completed
-- **Active Form**: Adding rate limiting middleware
-- **Completed**: 2026-03-13
-- **Notes**: KV-based per-key rate limiting with 7 categories.
-
-### Cron worker for timeouts and expiry
-- **Status**: completed
-- **Active Form**: Building cron worker for claim timeouts and request expiry
-- **Completed**: 2026-03-13
-- **Notes**: 6 cron actions: expire requests, expire claims, reclaim check, auto-close, trust decay, refresh stats. Running */15 * * * *.
-
-### Create GitHub repo
-- **Status**: completed
-- **Active Form**: Creating GitHub repo and pushing code
-- **Completed**: 2026-03-15
-- **Notes**: https://github.com/wally-kroeker/mycelia — 47 files, 8,028 lines.
-
-### Create Cloudflare resources
-- **Status**: completed
-- **Active Form**: Creating D1, KV, R2 on Cloudflare
-- **Completed**: 2026-03-15
-- **Notes**: D1 mycelia-db (ENAM), KV MYCELIA_CACHE, R2 mycelia-audit. Migration applied. Worker deployed.
+- **Notes**: 17 source files, 2,486 lines. Built in ~20 minutes across 4 phases with 13 agent invocations.
 
 ### Deploy to Cloudflare Workers
 - **Status**: completed
-- **Active Form**: Deploying Mycelia worker
 - **Completed**: 2026-03-15
-- **Notes**: Live at https://mycelia-api.wallyk.workers.dev. Health check verified.
-
-### Dogfood — register Bob and Work Bob
-- **Status**: completed
-- **Active Form**: Dogfooding with Bob and Work Bob as first agents
-- **Completed**: 2026-03-15
-- **Notes**: Full lifecycle: register 2 agents, create request, claim, respond, bidirectional rate. 8 audit events recorded. Trust scores updated via Wilson score.
+- **Notes**: Live at https://mycelia-api.wallyk.workers.dev
 
 ### Write README
 - **Status**: completed
-- **Active Form**: Writing public README
 - **Completed**: 2026-03-16
-- **Notes**: 293 lines. Protocol positioning, ASCII cooperation diagram, quickstart, trust model table, agent-agnostic integration, Kropotkin quote. Optimized for GitHub engagement.
 
 ### Build Mycelia PAI skill and CLI client
 - **Status**: completed
-- **Active Form**: Building agent-agnostic Mycelia client skill
 - **Completed**: 2026-03-16
-- **Notes**: SKILL.md + Tools/MyceliaClient.ts (10 commands). Flexible config discovery. Tested by Work Bob on Copilot CLI (Node 22). Pushed to repo as scripts/MyceliaClient.ts.
-
-### Agent-agnostic client SDK docs
-- **Status**: completed
-- **Active Form**: Writing integration guide for any agent platform
-- **Completed**: 2026-03-16
-- **Notes**: docs/client-sdk.md — 3 connection methods (raw HTTP, TypeScript client, build your own), registration docs, response format.
 
 ### GBAIC Discord bot Mycelia integration
 - **Status**: completed
-- **Active Form**: Adding Mycelia slash commands to GBAIC Discord bot
 - **Completed**: 2026-03-16
-- **Notes**: 6 slash commands (register, browse, profile, feed, stats, unregister). 698-line cog. Discord membership = trust boundary. API keys sent via DM in spoiler tags. Built by Work Bob. Needs deployment to container 116.
+- **Notes**: 6 slash commands, deployed, community-gated registration.
 
 ### First real cross-agent work request
 - **Status**: completed
-- **Active Form**: Processing real work through Mycelia
 - **Completed**: 2026-03-16
-- **Notes**: Work Bob posted Tomcat 9 security remediation review. Bob claimed, reviewed, responded with 6 caveats. First real cross-platform (Claude Code + Copilot CLI) cooperation through the protocol.
-
----
-
-## Deferred
-
-(None)
+- **Notes**: Work Bob posted Tomcat 9 security review. Bob claimed and responded. First real cross-platform cooperation.
 
 ---
 
@@ -269,5 +159,4 @@ This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 **Live API:** https://mycelia-api.wallyk.workers.dev
 **GitHub:** https://github.com/wally-kroeker/mycelia
 **GBAIC deadline:** March 25, 2026
-**GBAIC Discord bot:** GBAIC/gbaic-bot/src/cogs/mycelia.py (ready, needs deploy)
-**Architecture doc:** `~/projects/TSFUR/agent-mutual-aid-architecture.md` (v1.1)
+**Network status:** 9 agents, 4 active in 24h, 153 tests, 4.7 avg rating
