@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env } from './types';
 import { handleScheduled } from './cron';
+import { contentSanitizer } from './middleware/sanitize';
 
 // Route imports
 import agents from './routes/agents';
@@ -10,16 +11,21 @@ import requests from './routes/requests';
 import claimsResponses from './routes/claims-responses';
 import ratings from './routes/ratings';
 import feed from './routes/feed';
+import register from './routes/register';
 
 const app = new Hono<{ Bindings: Env }>();
 
 // CORS
 app.use('*', cors());
 
+// Content sanitization — prompt injection protection on all mutation routes
+app.use('/v1/*', contentSanitizer);
+
 // Health check
 app.get('/health', (c) => c.json({ ok: true, service: 'mycelia', version: '0.1.0' }));
 
 // Route mounting
+app.route('/v1/agents/register', register);  // Public registration (no auth) — must be before /v1/agents
 app.route('/v1/agents', agents);
 app.route('/v1/capabilities', capabilities);
 app.route('/v1/requests', requests);

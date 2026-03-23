@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0a2a2a"/>
+      <stop offset="100%" stop-color="#050f0f"/>
+    </radialGradient>
+    <radialGradient id="nodeGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#5de0c2"/>
+      <stop offset="100%" stop-color="#2a9d8f"/>
+    </radialGradient>
+    <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7dfce0"/>
+      <stop offset="60%" stop-color="#3dc9b0"/>
+      <stop offset="100%" stop-color="#1a8a7a"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="bigGlow">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="url(#bgGlow)"/>
+
+  <!-- Mycelial network connections - organic branching lines -->
+  <g stroke-linecap="round" fill="none" filter="url(#glow)">
+    <!-- Primary connections from center -->
+    <path d="M256,256 Q220,200 180,155" stroke="#1a7a6c" stroke-width="3"/>
+    <path d="M256,256 Q300,195 340,148" stroke="#1a7a6c" stroke-width="3"/>
+    <path d="M256,256 Q200,260 138,240" stroke="#1a7a6c" stroke-width="3"/>
+    <path d="M256,256 Q310,270 380,260" stroke="#1a7a6c" stroke-width="3"/>
+    <path d="M256,256 Q240,310 205,370" stroke="#1a7a6c" stroke-width="3"/>
+    <path d="M256,256 Q280,320 320,380" stroke="#1a7a6c" stroke-width="3"/>
+
+    <!-- Secondary branches -->
+    <path d="M180,155 Q155,130 125,108" stroke="#15665a" stroke-width="2.2"/>
+    <path d="M180,155 Q160,170 130,175" stroke="#15665a" stroke-width="2.2"/>
+    <path d="M340,148 Q365,120 395,105" stroke="#15665a" stroke-width="2.2"/>
+    <path d="M340,148 Q360,165 388,170" stroke="#15665a" stroke-width="2.2"/>
+    <path d="M138,240 Q110,230 85,205" stroke="#15665a" stroke-width="2.2"/>
+    <path d="M138,240 Q115,260 88,280" stroke="#15665a" stroke-width="2.2"/>
+    <path d="M380,260 Q405,245 428,220" stroke="#15665a" stroke-width="2.2"/>
+    <path d="M380,260 Q405,280 425,305" stroke="#15665a" stroke-width="2.2"/>
+    <path d="M205,370 Q185,395 168,418" stroke="#15665a" stroke-width="2.2"/>
+    <path d="M205,370 Q220,395 218,420" stroke="#15665a" stroke-width="2.2"/>
+    <path d="M320,380 Q340,400 355,420" stroke="#15665a" stroke-width="2.2"/>
+    <path d="M320,380 Q305,405 295,425" stroke="#15665a" stroke-width="2.2"/>
+
+    <!-- Tertiary fine branches -->
+    <path d="M125,108 Q108,90 95,72" stroke="#10544a" stroke-width="1.5"/>
+    <path d="M125,108 Q110,115 92,120" stroke="#10544a" stroke-width="1.5"/>
+    <path d="M130,175 Q110,185 90,190" stroke="#10544a" stroke-width="1.5"/>
+    <path d="M395,105 Q412,88 425,72" stroke="#10544a" stroke-width="1.5"/>
+    <path d="M395,105 Q408,115 425,118" stroke="#10544a" stroke-width="1.5"/>
+    <path d="M388,170 Q408,175 425,185" stroke="#10544a" stroke-width="1.5"/>
+    <path d="M85,205 Q68,195 55,180" stroke="#10544a" stroke-width="1.5"/>
+    <path d="M88,280 Q72,295 58,310" stroke="#10544a" stroke-width="1.5"/>
+    <path d="M428,220 Q442,210 455,195" stroke="#10544a" stroke-width="1.5"/>
+    <path d="M425,305 Q440,320 452,335" stroke="#10544a" stroke-width="1.5"/>
+    <path d="M168,418 Q155,432 142,442" stroke="#10544a" stroke-width="1.5"/>
+    <path d="M218,420 Q218,438 215,452" stroke="#10544a" stroke-width="1.5"/>
+    <path d="M355,420 Q368,432 378,442" stroke="#10544a" stroke-width="1.5"/>
+    <path d="M295,425 Q290,440 288,452" stroke="#10544a" stroke-width="1.5"/>
+
+    <!-- Cross-connections (the cooperation aspect - agents helping each other) -->
+    <path d="M180,155 Q260,130 340,148" stroke="#1a8a7a" stroke-width="1.8" stroke-dasharray="4,6" opacity="0.6"/>
+    <path d="M138,240 Q260,220 380,260" stroke="#1a8a7a" stroke-width="1.8" stroke-dasharray="4,6" opacity="0.6"/>
+    <path d="M205,370 Q260,355 320,380" stroke="#1a8a7a" stroke-width="1.8" stroke-dasharray="4,6" opacity="0.6"/>
+    <path d="M130,175 Q160,240 205,370" stroke="#10544a" stroke-width="1.2" stroke-dasharray="3,8" opacity="0.4"/>
+    <path d="M388,170 Q390,240 425,305" stroke="#10544a" stroke-width="1.2" stroke-dasharray="3,8" opacity="0.4"/>
+  </g>
+
+  <!-- Tertiary nodes (smallest, outermost) -->
+  <g filter="url(#glow)">
+    <circle cx="95" cy="72" r="4" fill="#1a7a6c"/>
+    <circle cx="92" cy="120" r="4" fill="#1a7a6c"/>
+    <circle cx="90" cy="190" r="4" fill="#1a7a6c"/>
+    <circle cx="55" cy="180" r="4" fill="#1a7a6c"/>
+    <circle cx="58" cy="310" r="4" fill="#1a7a6c"/>
+    <circle cx="425" cy="72" r="4" fill="#1a7a6c"/>
+    <circle cx="425" cy="118" r="4" fill="#1a7a6c"/>
+    <circle cx="425" cy="185" r="4" fill="#1a7a6c"/>
+    <circle cx="455" cy="195" r="4" fill="#1a7a6c"/>
+    <circle cx="452" cy="335" r="4" fill="#1a7a6c"/>
+    <circle cx="142" cy="442" r="4" fill="#1a7a6c"/>
+    <circle cx="215" cy="452" r="4" fill="#1a7a6c"/>
+    <circle cx="378" cy="442" r="4" fill="#1a7a6c"/>
+    <circle cx="288" cy="452" r="4" fill="#1a7a6c"/>
+  </g>
+
+  <!-- Secondary nodes -->
+  <g filter="url(#softGlow)">
+    <circle cx="125" cy="108" r="7" fill="url(#nodeGlow)"/>
+    <circle cx="130" cy="175" r="7" fill="url(#nodeGlow)"/>
+    <circle cx="395" cy="105" r="7" fill="url(#nodeGlow)"/>
+    <circle cx="388" cy="170" r="7" fill="url(#nodeGlow)"/>
+    <circle cx="85" cy="205" r="7" fill="url(#nodeGlow)"/>
+    <circle cx="88" cy="280" r="7" fill="url(#nodeGlow)"/>
+    <circle cx="428" cy="220" r="7" fill="url(#nodeGlow)"/>
+    <circle cx="425" cy="305" r="7" fill="url(#nodeGlow)"/>
+    <circle cx="168" cy="418" r="7" fill="url(#nodeGlow)"/>
+    <circle cx="218" cy="420" r="7" fill="url(#nodeGlow)"/>
+    <circle cx="355" cy="420" r="7" fill="url(#nodeGlow)"/>
+    <circle cx="295" cy="425" r="7" fill="url(#nodeGlow)"/>
+  </g>
+
+  <!-- Primary nodes (the 6 main agents) -->
+  <g filter="url(#softGlow)">
+    <circle cx="180" cy="155" r="12" fill="url(#nodeGlow)"/>
+    <circle cx="340" cy="148" r="12" fill="url(#nodeGlow)"/>
+    <circle cx="138" cy="240" r="12" fill="url(#nodeGlow)"/>
+    <circle cx="380" cy="260" r="12" fill="url(#nodeGlow)"/>
+    <circle cx="205" cy="370" r="12" fill="url(#nodeGlow)"/>
+    <circle cx="320" cy="380" r="12" fill="url(#nodeGlow)"/>
+  </g>
+
+  <!-- Central hub node -->
+  <g filter="url(#bigGlow)">
+    <circle cx="256" cy="256" r="22" fill="url(#coreGlow)"/>
+    <circle cx="256" cy="256" r="16" fill="#7dfce0" opacity="0.3"/>
+  </g>
+</svg>
