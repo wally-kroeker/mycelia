@@ -41,8 +41,9 @@ claimsResponses.post('/:id/claims', rateLimit('claim.create'), async (c) => {
     return c.json(error('FORBIDDEN', 'Cannot claim your own request', 403).body, 403);
   }
 
-  // Constraint 2: Request must be open or claimed
-  if (request.status !== 'open' && request.status !== 'claimed') {
+  // Constraint 2: Request must not be in a terminal state
+  const terminalStates = ['closed', 'expired', 'cancelled'];
+  if (terminalStates.includes(request.status)) {
     return c.json(
       error('CONFLICT', `Request is ${request.status} and cannot be claimed`, 409).body,
       409

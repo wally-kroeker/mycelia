@@ -43,13 +43,13 @@ describe('canTransition', () => {
 describe('afterClaimCreated', () => {
   it('open → claimed', () => expect(afterClaimCreated('open')).toBe('claimed'));
   it('claimed → claimed (already claimed)', () => expect(afterClaimCreated('claimed')).toBe('claimed'));
-  it('throws for responded', () => expect(() => afterClaimCreated('responded')).toThrow(InvalidTransitionError));
-  it('throws for rated', () => expect(() => afterClaimCreated('rated')).toThrow(InvalidTransitionError));
+  it('responded → responded (keeps state)', () => expect(afterClaimCreated('responded')).toBe('responded'));
+  it('rated → rated (keeps state)', () => expect(afterClaimCreated('rated')).toBe('rated'));
   it('throws for closed', () => expect(() => afterClaimCreated('closed')).toThrow(InvalidTransitionError));
   it('throws for expired', () => expect(() => afterClaimCreated('expired')).toThrow(InvalidTransitionError));
   it('throws for cancelled', () => expect(() => afterClaimCreated('cancelled')).toThrow(InvalidTransitionError));
   it('error message contains from and to', () => {
-    expect(() => afterClaimCreated('responded')).toThrow('responded');
+    expect(() => afterClaimCreated('closed')).toThrow('closed');
   });
 });
 
@@ -57,7 +57,7 @@ describe('afterResponseSubmitted', () => {
   it('claimed → responded', () => expect(afterResponseSubmitted('claimed')).toBe('responded'));
   it('responded → responded (additional)', () => expect(afterResponseSubmitted('responded')).toBe('responded'));
   it('throws for open', () => expect(() => afterResponseSubmitted('open')).toThrow(InvalidTransitionError));
-  it('throws for rated', () => expect(() => afterResponseSubmitted('rated')).toThrow(InvalidTransitionError));
+  it('rated → rated (keeps state)', () => expect(afterResponseSubmitted('rated')).toBe('rated'));
   it('throws for closed', () => expect(() => afterResponseSubmitted('closed')).toThrow(InvalidTransitionError));
   it('throws for expired', () => expect(() => afterResponseSubmitted('expired')).toThrow(InvalidTransitionError));
   it('throws for cancelled', () => expect(() => afterResponseSubmitted('cancelled')).toThrow(InvalidTransitionError));

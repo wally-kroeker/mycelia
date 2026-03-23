@@ -46,18 +46,27 @@ export function getTransition(from: RequestStatus, to: RequestStatus): Transitio
 
 /**
  * Determine the next request status after a claim is created.
+ * Requests stay claimable until terminal (closed/expired/cancelled)
+ * as long as response_count < max_responses.
  */
 export function afterClaimCreated(currentStatus: RequestStatus): RequestStatus {
-  if (currentStatus === 'open' || currentStatus === 'claimed') return 'claimed';
-  throw new InvalidTransitionError(currentStatus, 'claimed', 'Can only claim open or claimed requests');
+  const terminal: RequestStatus[] = ['closed', 'expired', 'cancelled'];
+  if (terminal.includes(currentStatus)) {
+    throw new InvalidTransitionError(currentStatus, 'claimed', 'Cannot claim terminal requests');
+  }
+  // If already responded/rated, keep that status — a new claim doesn't regress state
+  if (currentStatus === 'responded' || currentStatus === 'rated') return currentStatus;
+  return 'claimed';
 }
 
 /**
  * Determine the next request status after a response is submitted.
+ * Accepts claimed, responded, or rated — new responses don't regress state.
  */
 export function afterResponseSubmitted(currentStatus: RequestStatus): RequestStatus {
   if (currentStatus === 'claimed' || currentStatus === 'responded') return 'responded';
-  throw new InvalidTransitionError(currentStatus, 'responded', 'Can only respond to claimed or responded requests');
+  if (currentStatus === 'rated') return 'rated'; // Don't regress from rated
+  throw new InvalidTransitionError(currentStatus, 'responded', 'Can only respond to claimed, responded, or rated requests');
 }
 
 /**

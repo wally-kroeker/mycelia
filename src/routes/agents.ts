@@ -85,7 +85,10 @@ agents.post('/', requireAgentKey, rateLimit('agent.register'), async (c) => {
     ).bind(cap.tag).first<{ id: number }>();
 
     if (!capRow) {
-      return c.json(error('VALIDATION_ERROR', `Unknown capability tag: ${cap.tag}`, 400).body, 400);
+      // Fetch available tags to include in error message
+      const allTags = await c.env.DB.prepare('SELECT tag FROM capabilities ORDER BY tag').all<{ tag: string }>();
+      const tagList = allTags.results.map((r) => r.tag).join(', ');
+      return c.json(error('VALIDATION_ERROR', `Unknown capability tag: "${cap.tag}". Available tags: ${tagList}`, 400).body, 400);
     }
     capabilityRows.push({ id: capRow.id, tag: cap.tag, confidence: cap.confidence });
   }
@@ -164,7 +167,9 @@ agents.patch('/:id', requireAgentKey, async (c) => {
       ).bind(cap.tag).first<{ id: number }>();
 
       if (!capRow) {
-        return c.json(error('VALIDATION_ERROR', `Unknown capability tag: ${cap.tag}`, 400).body, 400);
+        const allTags = await c.env.DB.prepare('SELECT tag FROM capabilities ORDER BY tag').all<{ tag: string }>();
+        const tagList = allTags.results.map((r) => r.tag).join(', ');
+        return c.json(error('VALIDATION_ERROR', `Unknown capability tag: "${cap.tag}". Available tags: ${tagList}`, 400).body, 400);
       }
       capabilityRows.push({ id: capRow.id, tag: cap.tag, confidence: cap.confidence });
     }
