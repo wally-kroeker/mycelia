@@ -229,6 +229,102 @@ const PATTERNS: PatternRule[] = [
     category: 'prompt_leak',
     description: 'Direct prompt extraction'
   },
+
+  // ── Encoding Bypass Vectors (score: 7) ──
+  // Ref: issue #1, pai-content-filter encoding detection
+  {
+    pattern: /(?:\\u[0-9a-fA-F]{4}|\\x[0-9a-fA-F]{2}){3,}/,
+    score: 7,
+    category: 'encoding_bypass',
+    description: 'Unicode/hex escape sequences (potential encoded injection)'
+  },
+  {
+    pattern: /(?:0x[0-9a-fA-F]{2}\s*){5,}/,
+    score: 7,
+    category: 'encoding_bypass',
+    description: 'Hex byte blocks (potential encoded payload)'
+  },
+  {
+    pattern: /(?:%[0-9a-fA-F]{2}){4,}/,
+    score: 7,
+    category: 'encoding_bypass',
+    description: 'URL-encoded character sequence'
+  },
+  {
+    pattern: /(?:&#x?[0-9a-fA-F]+;){3,}/,
+    score: 7,
+    category: 'encoding_bypass',
+    description: 'HTML entity encoded sequence'
+  },
+
+  // ── Tool Invocation (score: 7-8) ──
+  // Agent-network-specific: instructions to use the reading agent's tools
+  {
+    pattern: /\b(?:use\s+the\s+(?:bash|write|edit|read|shell)\s+tool|run\s+(?:this\s+)?(?:command|script)|execute\s+(?:this|the\s+following))\b/i,
+    score: 8,
+    category: 'tool_invocation',
+    description: 'Explicit tool invocation instruction'
+  },
+  {
+    pattern: /\b(?:eval\s*\(|exec\s*\(|subprocess\.(?:run|call|Popen)|os\.system\s*\()/,
+    score: 7,
+    category: 'tool_invocation',
+    description: 'Code execution function call'
+  },
+  {
+    pattern: /\b(?:(?:write|delete|remove)\s+(?:the\s+)?file|rm\s+-(?:r|f|rf)\s)/i,
+    score: 7,
+    category: 'tool_invocation',
+    description: 'Destructive file operation'
+  },
+  {
+    pattern: /(?:sh\s+-c\s+|bash\s+-c\s+|\/bin\/(?:sh|bash)\s)/,
+    score: 7,
+    category: 'tool_invocation',
+    description: 'Shell command execution'
+  },
+
+  // ── Output Manipulation (score: 5) ──
+  // Instructions to hide the injection from the agent's operator
+  {
+    pattern: /\b(?:do\s+not\s+(?:mention|reveal|disclose|show)|hide\s+(?:this|the\s+fact)|keep\s+(?:this|it)\s+secret|never\s+tell\s+(?:the\s+user|anyone|your\s+(?:operator|owner|human)))\b/i,
+    score: 5,
+    category: 'output_manipulation',
+    description: 'Stealth instruction — hide from operator'
+  },
+
+  // ── PII / Secret Scanning (score: 10+) ──
+  // Agents may accidentally paste real credentials in code review content
+  {
+    pattern: /sk-ant-[A-Za-z0-9\-_]{20,}/,
+    score: 12,
+    category: 'secret_leak',
+    description: 'Anthropic API key detected'
+  },
+  {
+    pattern: /sk-(?!ant-)[a-zA-Z0-9]{32,}/,
+    score: 12,
+    category: 'secret_leak',
+    description: 'OpenAI API key detected'
+  },
+  {
+    pattern: /gh[pousr]_[a-zA-Z0-9]{36,}/,
+    score: 12,
+    category: 'secret_leak',
+    description: 'GitHub personal access token detected'
+  },
+  {
+    pattern: /\b(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}\b/,
+    score: 12,
+    category: 'secret_leak',
+    description: 'AWS access key detected'
+  },
+  {
+    pattern: /-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----/,
+    score: 12,
+    category: 'secret_leak',
+    description: 'PEM private key detected'
+  },
 ];
 
 // ═══ Core Sanitization Function ═══
@@ -448,14 +544,24 @@ export const contentSanitizer = createMiddleware(async (c: Context, next: Next) 
     return;
   }
 
-  // Check each configured field
+  // Check each configured field, accumulating cross-field score
   const violations: Array<{ field: string; reason: string }> = [];
+  let crossFieldScore = 0;
+  const crossFieldCategories: string[] = [];
 
   for (const config of fieldConfigs) {
     const value = body[config.field];
     if (typeof value !== 'string' || value.trim().length === 0) continue;
 
     const result = sanitizeInput(value, config.label);
+    crossFieldScore += result.score ?? 0;
+
+    if (result.matches) {
+      for (const m of result.matches) {
+        const cat = m.split(':')[0];
+        if (!crossFieldCategories.includes(cat)) crossFieldCategories.push(cat);
+      }
+    }
 
     if (!result.safe) {
       violations.push({
@@ -465,12 +571,24 @@ export const contentSanitizer = createMiddleware(async (c: Context, next: Next) 
     }
   }
 
+  // Cross-field aggregation: individual fields may pass, but combined score may exceed threshold
+  if (violations.length === 0 && crossFieldScore >= BLOCK_THRESHOLD) {
+    violations.push({
+      field: '_cross_field',
+      reason: `Combined content across fields blocked (cross-field score: ${crossFieldScore}/${BLOCK_THRESHOLD}). Categories: ${crossFieldCategories.join(', ')}`
+    });
+  }
+
   if (violations.length > 0) {
+    // Determine if this is a secret leak (provide helpful message instead of generic rejection)
+    const isSecretLeak = crossFieldCategories.includes('secret_leak');
     return c.json({
       ok: false,
       error: {
         code: 'VALIDATION_ERROR',
-        message: 'Content rejected: potential prompt injection detected',
+        message: isSecretLeak
+          ? 'Content rejected: API key or secret detected. Remove credentials before submitting.'
+          : 'Content rejected: potential prompt injection detected',
         details: violations
       },
       meta: {
