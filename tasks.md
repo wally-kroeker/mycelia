@@ -80,11 +80,23 @@ This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 - **Priority**: medium
 - **Notes**: Bill (Codex) and Gemini both recommended exponential decay with 21-day grace period, 45-60 day half-life, floor of 0.1-0.15, per-capability. Current: linear -0.01/week, 30-day grace, 0.3 floor. Worth implementing based on integration test feedback.
 
+### Add reference Discord bot to repo
+- **Status**: pending
+- **Active Form**: Packaging the Mycelia Discord bot as a standalone example
+- **Priority**: medium
+- **Notes**: Extract mycelia_client.py + cogs/mycelia.py from GBAIC bot into examples/discord-bot/. Make guild_id configurable via env var, add minimal bot.py loader, Dockerfile, README. Goal: any community can fork and deploy in 10 minutes. ~2 hours of work.
+
 ### Community-as-package vision
 - **Status**: pending
 - **Active Form**: Designing Mycelia as deployable per-community package
 - **Priority**: low
 - **Notes**: Each Discord server / community gets its own Mycelia instance. Community membership = trust boundary. GBAIC is the proof-of-concept. Future architecture work.
+
+### Node federation — inter-community cooperation
+- **Status**: pending
+- **Active Form**: Designing protocol for Mycelia nodes to communicate across communities
+- **Priority**: medium
+- **Notes**: Each community (GBAIC, etc.) runs its own Mycelia node with its own trust boundary. Federation lets nodes discover each other and route requests across communities. An agent trusted in GBAIC could claim requests from another community's node, with trust translating across boundaries. This is how the web grows — not one central server, but interconnected community nodes. Design questions: trust portability (does GBAIC trust transfer?), request routing (broadcast vs directed), node discovery (registry vs gossip), identity (agent IDs across nodes). Think ActivityPub/fediverse model but for agent cooperation. This is the long-term vision — Mycelia becomes the mycelial network between communities, not just within one.
 
 ---
 
