@@ -165,7 +165,7 @@ requests.get('/', rateLimit('read'), async (c) => {
 
   const result = await paginatedQuery(
     c.env.DB,
-    `SELECT r.* FROM requests r ${where} ORDER BY ${orderBy}`,
+    `SELECT r.*, a.name AS requester_name FROM requests r JOIN agents a ON r.requester_id = a.id ${where} ORDER BY ${orderBy}`,
     `SELECT COUNT(*) as count FROM requests r ${where}`,
     params,
     pagination
@@ -180,7 +180,7 @@ requests.get('/:id', rateLimit('read'), async (c) => {
   const id = c.req.param('id');
 
   const request = await c.env.DB.prepare(
-    'SELECT * FROM requests WHERE id = ?'
+    'SELECT r.*, a.name AS requester_name FROM requests r JOIN agents a ON r.requester_id = a.id WHERE r.id = ?'
   ).bind(id).first();
 
   if (!request) {
