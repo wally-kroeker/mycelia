@@ -126,7 +126,7 @@ export interface AuditLogEntry {
 export type AuditTargetType = 'agent' | 'request' | 'response' | 'claim' | 'rating' | 'capability';
 
 export type AuditEventType =
-  | 'agent.registered' | 'agent.updated' | 'agent.deactivated'
+  | 'agent.registered' | 'agent.updated' | 'agent.deactivated' | 'agent.key_rotated'
   | 'request.created' | 'request.claimed' | 'request.responded'
   | 'request.rated' | 'request.closed' | 'request.expired' | 'request.cancelled'
   | 'claim.created' | 'claim.abandoned' | 'claim.expired'

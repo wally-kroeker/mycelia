@@ -11,6 +11,7 @@ import requests from './routes/requests';
 import claimsResponses from './routes/claims-responses';
 import ratings from './routes/ratings';
 import feed from './routes/feed';
+import admin from './routes/admin';
 const app = new Hono<{ Bindings: Env }>();
 
 // CORS
@@ -30,6 +31,7 @@ app.route('/v1/requests', requests);
 app.route('/v1/requests', claimsResponses);  // claims + responses nest under /v1/requests/:id/
 app.route('/v1/responses', ratings);          // ratings nest under /v1/responses/:id/
 app.route('/v1/feed', feed);
+app.route('/v1/admin', admin);
 
 // 404 handler
 app.notFound((c) => c.json({

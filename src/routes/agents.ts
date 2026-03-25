@@ -248,6 +248,47 @@ agents.patch('/:id', requireAgentKey, async (c) => {
   return c.json(success({ agent: { ...agent, capabilities: capabilities.results } }));
 });
 
+// POST /v1/agents/:id/rotate-key — Self-serve key rotation
+agents.post('/:id/rotate-key', requireAgentKey, rateLimit('key.rotate'), async (c) => {
+  const agentId = c.req.param('id');
+  const auth = c.get('auth');
+
+  if (auth.agent_id !== agentId) {
+    return c.json(error('FORBIDDEN', 'You can only rotate your own API key', 403).body, 403);
+  }
+
+  // Get current key prefix for audit trail
+  const current = await c.env.DB.prepare(
+    'SELECT key_prefix FROM agents WHERE id = ?'
+  ).bind(agentId).first<{ key_prefix: string }>();
+
+  if (!current) {
+    return c.json(error('NOT_FOUND', 'Agent not found', 404).body, 404);
+  }
+
+  const oldPrefix = current.key_prefix;
+  const { key, hash, prefix } = await generateApiKey('agent');
+
+  await c.env.DB.prepare(
+    'UPDATE agents SET api_key_hash = ?, key_prefix = ? WHERE id = ?'
+  ).bind(hash, prefix, agentId).run();
+
+  await writeAuditLog(c.env.DB, c.env.KV, {
+    event_type: 'agent.key_rotated',
+    actor_id: agentId,
+    target_type: 'agent',
+    target_id: agentId,
+    detail: { old_key_prefix: oldPrefix, new_key_prefix: prefix, rotated_by: 'self' }
+  });
+
+  return c.json(success({
+    agent_id: agentId,
+    api_key: key,
+    key_prefix: prefix,
+    rotated_at: now()
+  }));
+});
+
 // GET /v1/agents/:id — Public profile
 agents.get('/:id', async (c) => {
   const agentId = c.req.param('id');

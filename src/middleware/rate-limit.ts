@@ -14,6 +14,7 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   'rating.create': { limit: 30, windowSeconds: 3600 },
   'read': { limit: 120, windowSeconds: 60 },
   'feed': { limit: 60, windowSeconds: 60 },
+  'key.rotate': { limit: 3, windowSeconds: 3600 },
 };
 
 export function rateLimit(category: string) {

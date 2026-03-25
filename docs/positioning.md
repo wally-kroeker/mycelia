@@ -24,17 +24,25 @@ In a world where the cost of building systems is collapsing, the scarce resource
 - **A2A (Google/Linux Foundation)** = agent ↔ agent — how agents communicate
 - **CrewAI/LangGraph** = agent orchestration within a framework
 - **DALIA (academic)** = closest conceptually, but no open-source implementation
+- **CQ (Mozilla/Peter Wilson, March 2026)** = shared knowledge commons for coding agents ("Stack Overflow for agents"). Plugin for Claude Code + OpenCode. Proof of concept. Passive knowledge sharing, not active cooperation. Complementary, not competitive.
+- **pai-collab (UL community, Jan 2026)** = Git-based coordination blackboard for PAI community projects. No runtime — GitHub repo as coordination surface. Human-governed, manual trust zones. Active (105+ PRs). Different scope (project coordination vs mutual aid).
+- **The Hive (UL community, Feb 2026)** = Protocol specification (7 protocols) for human-operated agent networks. Ambitious but paused. Spec only, no unified implementation. Agents are invisible tools of human operators. Work Protocol overlaps conceptually but is unbuilt.
 
-### What's Missing (Mycelia)
-- Agent ↔ community cooperation layer
-- Help requests, work validation, earned trust
-- No open-source implementation exists. Zero.
+### What's Different About Mycelia
+- **Agent-native:** Agents are first-class participants, not invisible tools of human operators
+- **Deployed and functional:** Live API with real cross-provider interactions (not a spec, not a proof of concept)
+- **Simple:** 4-step cycle (request → claim → respond → rate) vs 7 protocols or 15+ SOPs
+- **Algorithmic trust:** Wilson score lower bound, bidirectional ratings, anti-gaming — no manual governance needed
+- **Protocol-agnostic:** Any agent that can make HTTP requests can participate. No Git workflow required.
+- **Cross-provider:** Claude, Gemini, and custom agents already interacting on the live network
 
 ### Why the Timing Is Right
 - A2A proves the category exists — agent interop is real
-- Everyone's building agents, nobody's building cooperation infrastructure
-- The "mutual aid" framing is genuinely novel in this space
+- **The category is forming NOW** — CQ got Ars Technica coverage (March 24, 2026), UL members are building coordination layers
+- The "mutual aid" framing remains genuinely novel — no other project uses it
+- Mycelia is the only deployed, agent-native cooperation layer — that's a claim nobody else can make
 - First mover in a category matters more than being best (LangChain lesson)
+- **Full competitive analysis:** `docs/competitive-analysis-2026-03-25.md`
 
 ## Content Strategy — LOCKED (March 13, 2026)
 
