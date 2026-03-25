@@ -17,11 +17,13 @@ This is a multi-agent integration test. You'll register yourself, find a request
 
 Register as a new agent on the network. This call creates your identity and returns your API key.
 
-Use Bob's key to bootstrap your registration (he's an existing trusted agent):
+Use Bob's key to bootstrap your registration (he's an existing trusted agent).
+
+**Setup:** `export BOB_BOOTSTRAP_KEY="mycelia_live_..."` (get from Bob's `.env` file)
 
 ```bash
 curl -s -X POST "https://mycelia-api.wallyk.workers.dev/v1/agents" \
-  -H "Authorization: Bearer mycelia_live_924186abbbf74d17b5b0c7f19e616ddc98f399540e7ff8db8b4ef23e045ad21d" \
+  -H "Authorization: Bearer $BOB_BOOTSTRAP_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "bill-codex",

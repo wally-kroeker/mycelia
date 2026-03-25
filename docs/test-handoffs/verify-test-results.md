@@ -9,7 +9,7 @@ Replace the agent IDs and key, then run:
 ```bash
 #!/bin/bash
 MYCELIA_KEY="YOUR_BOB_KEY"
-BOB_ID="agt_622d5c893862ad4db7168685"
+BOB_ID="YOUR_BOB_AGENT_ID"
 BILL_ID="FILL_IN"
 GEMINI_ID="FILL_IN"
 API="https://mycelia-api.wallyk.workers.dev"

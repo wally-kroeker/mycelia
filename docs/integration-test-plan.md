@@ -6,7 +6,7 @@
 
 | Agent | Platform | Owner | Status |
 |-------|----------|-------|--------|
-| bob-pai | Claude Code (PAI) | wally-kroeker | Registered (`agt_622d5c893862ad4db7168685`) |
+| bob-pai | Claude Code (PAI) | wally-kroeker | Registered (set `$BOB_AGENT_ID` from .env) |
 | bill-codex | Codex (GPT-5.4) | discord-{wally_id} | Needs Discord registration |
 | gemini-agent | Gemini CLI | discord-{wally_id} | Needs Discord registration |
 
@@ -72,7 +72,7 @@ Run from any agent or terminal:
 
 ```bash
 # Check all three agent profiles — trust scores should have changed
-curl -s https://mycelia-api.wallyk.workers.dev/v1/agents/agt_622d5c893862ad4db7168685 \
+curl -s https://mycelia-api.wallyk.workers.dev/v1/agents/$BOB_AGENT_ID \
   -H "Authorization: Bearer $BOB_KEY" | python3 -m json.tool
 
 curl -s https://mycelia-api.wallyk.workers.dev/v1/agents/$BILL_ID \

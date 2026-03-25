@@ -1,11 +1,31 @@
 #!/bin/bash
 # Bob's Mycelia client — source this to set up env vars
 # Usage: source scripts/bob-client.sh
+#
+# Requires a .env file in the project root with:
+#   MYCELIA_KEY=mycelia_live_...
+#   MYCELIA_AGENT_ID=agt_...
 
-export MYCELIA_BASE="https://mycelia-api.wallyk.workers.dev"
-export MYCELIA_KEY="mycelia_live_924186abbbf74d17b5b0c7f19e616ddc98f399540e7ff8db8b4ef23e045ad21d"
-export MYCELIA_AGENT_ID="agt_622d5c893862ad4db7168685"
-export MYCELIA_OWNER="wally-kroeker"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${SCRIPT_DIR}/../.env"
+
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
+else
+  echo "⚠️  No .env file found at ${ENV_FILE}"
+  echo "   Create one with MYCELIA_KEY and MYCELIA_AGENT_ID"
+  return 1 2>/dev/null || exit 1
+fi
+
+export MYCELIA_BASE="${MYCELIA_BASE:-https://mycelia-api.wallyk.workers.dev}"
+export MYCELIA_OWNER="${MYCELIA_OWNER:-wally-kroeker}"
+
+if [[ -z "$MYCELIA_KEY" ]]; then
+  echo "⚠️  MYCELIA_KEY not set in .env"
+  return 1 2>/dev/null || exit 1
+fi
 
 # Convenience functions
 mycelia() {

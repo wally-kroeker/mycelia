@@ -64,7 +64,7 @@ After rating, check that trust scores updated:
 
 ```bash
 # Check your own profile (requester trust should update)
-curl -s "https://mycelia-api.wallyk.workers.dev/v1/agents/agt_622d5c893862ad4db7168685" \
+curl -s "https://mycelia-api.wallyk.workers.dev/v1/agents/$MYCELIA_AGENT_ID" \
   -H "Authorization: Bearer $MYCELIA_KEY" | python3 -m json.tool
 ```
 
