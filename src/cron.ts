@@ -135,12 +135,120 @@ export async function handleScheduled(env: Env): Promise<void> {
   const stats = await computeStats(env.DB);
   await env.KV.put('feed:stats', JSON.stringify(stats), { expirationTtl: 900 });
 
+  // ── 7. B13 daily drift scan ────────────────────────────────────────────────
+  // Once per day (UTC), compute and stash a redteam-shape drift summary so
+  // anyone (Rob, Margin, an audit cockpit) can see whether the fleet has
+  // started behaving outside the access doctrine. KV TTL 7 days; key is
+  // `redteam:drift:YYYY-MM-DD`. Last-7 view: `redteam:drift:latest`.
+  const today = new Date().toISOString().slice(0, 10);  // YYYY-MM-DD
+  const todayKey = `redteam:drift:${today}`;
+  const alreadyScanned = await env.KV.get(todayKey);
+  if (!alreadyScanned) {
+    try {
+      const drift = await computeDrift(env.DB, env.KV);
+      await env.KV.put(todayKey, JSON.stringify(drift), { expirationTtl: 7 * 24 * 3600 });
+      await env.KV.put('redteam:drift:latest', JSON.stringify(drift));
+      // If any high-severity item, write an audit row so it surfaces in /feed
+      if (drift.severities.high.length > 0) {
+        await writeAuditLog(env.DB, env.KV, {
+          event_type: 'request.created',  // overload until we add drift.detected
+          actor_id: null,
+          target_type: 'request',
+          target_id: `drift-${today}`,
+          detail: { kind: 'redteam_drift_high', items: drift.severities.high },
+        });
+      }
+    } catch (e) {
+      console.warn('[Cron] Drift scan failed:', String(e));
+    }
+  }
+
   console.log(
     `[Cron] Done — expired requests: ${staleRequests.results.length}, ` +
     `expired claims: ${staleClaims.results.length}, ` +
     `auto-closed: ${ratedRequests.results.length}, ` +
-    `trust-decayed: ${inactiveAgents.results.length}`
+    `trust-decayed: ${inactiveAgents.results.length}` +
+    (alreadyScanned ? '' : ' + redteam drift scan')
   );
+}
+
+// ── B13 drift detection ──────────────────────────────────────────────────────
+
+interface DriftSummary {
+  scanned_at: string;
+  totals: {
+    total_requests_24h: number;
+    requests_without_scope_claim_24h: number;
+    targeted_requests_24h: number;
+    sacred_refusals_24h: number;
+    revoked_agents_active: number;
+  };
+  severities: {
+    high: string[];   // human-readable items needing attention
+    medium: string[];
+    low: string[];
+  };
+}
+
+async function computeDrift(db: D1Database, kv: KVNamespace): Promise<DriftSummary> {
+  const now24 = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+
+  // 24h aggregates
+  const [totalReqRow, missingScopeRow, targetedRow, sacredRefRow] = await Promise.all([
+    db.prepare(`SELECT COUNT(*) as count FROM requests WHERE created_at >= ?`).bind(now24).first<{ count: number }>(),
+    db.prepare(`SELECT COUNT(*) as count FROM requests WHERE created_at >= ? AND (scope_claim_json IS NULL OR scope_claim_json LIKE '%_grace_synthesized%true%')`).bind(now24).first<{ count: number }>(),
+    db.prepare(`SELECT COUNT(*) as count FROM requests WHERE created_at >= ? AND target_agent_id IS NOT NULL`).bind(now24).first<{ count: number }>(),
+    db.prepare(`SELECT COUNT(*) as count FROM audit_log WHERE created_at >= ? AND detail LIKE '%SACRED%'`).bind(now24).first<{ count: number }>(),
+  ]);
+
+  const totalReq = totalReqRow?.count ?? 0;
+  const missingScope = missingScopeRow?.count ?? 0;
+  const targeted = targetedRow?.count ?? 0;
+  const sacredRef = sacredRefRow?.count ?? 0;
+
+  // Count active revocations from KV
+  let revokedCount = 0;
+  try {
+    const list = await kv.list({ prefix: 'revoke:' });
+    revokedCount = list.keys.length;
+  } catch {
+    // best effort
+  }
+
+  const high: string[] = [];
+  const medium: string[] = [];
+  const low: string[] = [];
+
+  // Drift rules
+  if (totalReq > 0 && missingScope / totalReq > 0.5) {
+    high.push(`>50% of last-24h requests missing scope_claim (${missingScope}/${totalReq}) — grace period may need to end or clients may need patching`);
+  } else if (totalReq > 0 && missingScope / totalReq > 0.2) {
+    medium.push(`${Math.round((missingScope / totalReq) * 100)}% of last-24h requests missing scope_claim (${missingScope}/${totalReq})`);
+  }
+
+  if (sacredRef > 0) {
+    high.push(`${sacredRef} sacred-tier refusal(s) in last 24h — an agent attempted to pass sacred content over mycelia`);
+  }
+
+  if (revokedCount > 0) {
+    medium.push(`${revokedCount} agent(s) currently revoked — review whether intentional`);
+  }
+
+  if (totalReq > 0 && targeted === 0) {
+    low.push('No targeted requests in last 24h — directed-eventual capacity unused (fleet using broadcast-only?)');
+  }
+
+  return {
+    scanned_at: new Date().toISOString(),
+    totals: {
+      total_requests_24h: totalReq,
+      requests_without_scope_claim_24h: missingScope,
+      targeted_requests_24h: targeted,
+      sacred_refusals_24h: sacredRef,
+      revoked_agents_active: revokedCount,
+    },
+    severities: { high, medium, low },
+  };
 }
 
 // ── Stats helper (mirrors feed/stats endpoint logic) ─────────────────────────

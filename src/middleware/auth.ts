@@ -99,8 +99,9 @@ export const authMiddleware = createMiddleware<{ Bindings: Env; Variables: { aut
 
 /**
  * Middleware that requires agent key type (not observer).
+ * Also enforces B8 kill-switch: revoked agents fail every action.
  */
-export const requireAgentKey = createMiddleware<{ Variables: { auth: AuthContext } }>(
+export const requireAgentKey = createMiddleware<{ Bindings: { KV: KVNamespace }; Variables: { auth: AuthContext } }>(
   async (c, next) => {
     const auth = c.get('auth');
     if (auth.key_type === 'observer') {
@@ -110,6 +111,26 @@ export const requireAgentKey = createMiddleware<{ Variables: { auth: AuthContext
         meta: { request_id: crypto.randomUUID(), timestamp: new Date().toISOString() }
       }, 403);
     }
+
+    // B8 kill-switch (2026-05-18): revoked agents cannot act, period.
+    // Self-revoke + admin-revoke handled in /routes/agents.ts.
+    try {
+      const { checkRevoked } = await import('../lib/revocation');
+      const rev = await checkRevoked(c.env.KV, auth.agent_id);
+      if (rev) {
+        return c.json({
+          ok: false,
+          error: {
+            code: 'AGENT_REVOKED',
+            message: `Agent ${auth.agent_id} is revoked (${rev.reason}).${rev.revoke_until ? ` Auto-lift at ${rev.revoke_until}.` : ' Until admin lifts.'}`,
+          },
+          meta: { request_id: crypto.randomUUID(), timestamp: new Date().toISOString() }
+        }, 403);
+      }
+    } catch {
+      // Fail open on KV error to avoid full-fleet outage; audit catches drift.
+    }
+
     await next();
   }
 );

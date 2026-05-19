@@ -5,6 +5,7 @@ import { rateLimit } from '../middleware/rate-limit';
 import { writeAuditLog } from '../lib/audit';
 import { kvInvalidateCapabilityCache } from '../lib/kv';
 import { success, error, generateId, now } from '../lib/utils';
+import { revoke, unrevoke, checkRevoked } from '../lib/revocation';
 
 const agents = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
 
@@ -270,6 +271,101 @@ agents.get('/:id', async (c) => {
   ).bind(agentId).all();
 
   return c.json(success({ agent: { ...agent, capabilities: capabilities.results } }));
+});
+
+// ─── POST /:id/revoke — Kill-switch (B8 from combined redteam) ───────────────
+// Either Rob (admin) or the agent itself (self-revoke) may revoke.
+// Body: { reason: string, revoke_until?: ISO-8601 string }
+agents.post('/:id/revoke', requireAgentKey, async (c) => {
+  const auth = c.get('auth');
+  const id = c.req.param('id');
+
+  // Authorization: self-revoke or rob (owner_id == rob-chuvala on the admin agent)
+  // We treat the caller's resolved agent as authoritative on self-revoke.
+  // For Rob admin we check the auth's owner_id.
+  const isSelf = auth.agent_id === id;
+  const isAdmin = auth.owner_id === 'rob-chuvala';
+  if (!isSelf && !isAdmin) {
+    return c.json(error('FORBIDDEN', 'Only the agent itself or rob-chuvala may revoke', 403).body, 403);
+  }
+
+  let body: { reason?: string; revoke_until?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    body = {};
+  }
+
+  const reason = (typeof body.reason === 'string' && body.reason.length > 0)
+    ? body.reason.slice(0, 500)
+    : (isSelf ? 'self-revoke (no reason given)' : 'admin-revoke (no reason given)');
+
+  // Validate revoke_until if provided
+  let revokeUntil: string | null = null;
+  if (body.revoke_until) {
+    const t = Date.parse(body.revoke_until);
+    if (isNaN(t)) {
+      return c.json(error('VALIDATION_ERROR', 'revoke_until must be ISO-8601', 400).body, 400);
+    }
+    if (t <= Date.now()) {
+      return c.json(error('VALIDATION_ERROR', 'revoke_until must be in the future', 400).body, 400);
+    }
+    revokeUntil = new Date(t).toISOString();
+  }
+
+  // Confirm target agent exists
+  const target = await c.env.DB.prepare(
+    'SELECT id, name FROM agents WHERE id = ?'
+  ).bind(id).first<{ id: string; name: string }>();
+  if (!target) {
+    return c.json(error('NOT_FOUND', 'Agent not found', 404).body, 404);
+  }
+
+  const entry = await revoke(c.env.KV, id, reason, auth.agent_id, revokeUntil);
+
+  await writeAuditLog(c.env.DB, c.env.KV, {
+    event_type: 'agent.deactivated',
+    actor_id: auth.agent_id,
+    target_type: 'agent',
+    target_id: id,
+    detail: {
+      via: 'kill_switch',
+      revoke_self: isSelf,
+      reason: entry.reason,
+      revoke_until: entry.revoke_until,
+    },
+  });
+
+  return c.json(success({ revocation: entry }), 201);
+});
+
+// ─── DELETE /:id/revoke — Lift a revocation (admin only) ────────────────────
+agents.delete('/:id/revoke', requireAgentKey, async (c) => {
+  const auth = c.get('auth');
+  const id = c.req.param('id');
+
+  if (auth.owner_id !== 'rob-chuvala') {
+    return c.json(error('FORBIDDEN', 'Only rob-chuvala may lift a revocation', 403).body, 403);
+  }
+
+  await unrevoke(c.env.KV, id);
+
+  await writeAuditLog(c.env.DB, c.env.KV, {
+    event_type: 'agent.updated',
+    actor_id: auth.agent_id,
+    target_type: 'agent',
+    target_id: id,
+    detail: { via: 'unrevoke' },
+  });
+
+  return c.json(success({ lifted: true, agent_id: id }));
+});
+
+// ─── GET /:id/revocation — Inspect current revocation state ─────────────────
+agents.get('/:id/revocation', async (c) => {
+  const id = c.req.param('id');
+  const entry = await checkRevoked(c.env.KV, id);
+  return c.json(success({ revoked: !!entry, entry }));
 });
 
 export default agents;

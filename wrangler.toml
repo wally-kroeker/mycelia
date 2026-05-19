@@ -20,6 +20,25 @@ binding = "KV"
 id = "4be87b971aa44128a9f2cdeccd4306b8"
 
 
+# Service Bindings — directed-synchronous fleet RPC (Step 5 2026-05-18)
+# 3 of 4 workers wired: mirror, gemini, mistral. Brook deferred (DO, different shape).
+# Spec: docs/specs/WORKER_ENTRYPOINT_SHAPE.md
+[[services]]
+binding = "MIRROR"
+service = "mirror-worker"
+entrypoint = "MirrorApi"
+
+[[services]]
+binding = "GEMINI"
+service = "gemini-worker"
+entrypoint = "GeminiApi"
+
+[[services]]
+binding = "MISTRAL"
+service = "mistral-worker"
+entrypoint = "MistralApi"
+
+
 # Cron trigger for timeouts/expiry
 [triggers]
 crons = ["*/15 * * * *"]

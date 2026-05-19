@@ -41,6 +41,19 @@ claimsResponses.post('/:id/claims', rateLimit('claim.create'), async (c) => {
     return c.json(error('FORBIDDEN', 'Cannot claim your own request', 403).body, 403);
   }
 
+  // Constraint 1b (v1.1): If request is targeted, only the target may claim.
+  // F1 cheap-fix from the combined redteam: directed requests bind to one agent.
+  if (request.target_agent_id != null && request.target_agent_id !== auth.agent_id) {
+    return c.json(
+      error(
+        'TARGETED_TO_OTHER_AGENT',
+        `This request is directed to agent ${request.target_agent_id}; you are ${auth.agent_id}. Other agents may not claim.`,
+        403
+      ).body,
+      403
+    );
+  }
+
   // Constraint 2: Request must not be in a terminal state
   const terminalStates = ['closed', 'expired', 'cancelled'];
   if (terminalStates.includes(request.status)) {
@@ -138,6 +151,9 @@ claimsResponses.post('/:id/claims', rateLimit('claim.create'), async (c) => {
       request_id: requestId,
       estimated_minutes: estimatedMinutes,
       expires_at: expiresAt,
+      // v1.1 audit
+      target_agent_id: request.target_agent_id,
+      was_directed: request.target_agent_id != null,
     },
   });
 
@@ -256,9 +272,54 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
   const responseId = generateId();
   const createdAt = now();
 
+  // v1.1 body_tier: responder declares the highest tier of content in body.
+  // Validated against enum; sacred refused at fleet boundary.
+  const validTiers = ['public', 'cohort', 'intimate', 'sacred'] as const;
+  const tierRank = { public: 0, cohort: 1, intimate: 2, sacred: 3 } as const;
+  const bodyTier = input.body_tier ?? 'public';
+  if (!validTiers.includes(bodyTier as any)) {
+    return c.json(
+      error('VALIDATION_ERROR', `body_tier must be one of: ${validTiers.join(', ')}`, 400).body,
+      400
+    );
+  }
+  if (bodyTier === 'sacred') {
+    return c.json(
+      error(
+        'FORBIDDEN',
+        'sacred-tier content cannot be transmitted over mycelia; direct Rob session required',
+        403
+      ).body,
+      403
+    );
+  }
+
+  // v1.1 server-side F1 enforcement (added 2026-05-18 second pass):
+  // Responder may not return a higher tier than the requester asked for.
+  // Closes the previously-convention enforcement gap.
+  if (request.scope_claim_json) {
+    try {
+      const reqScope = JSON.parse(request.scope_claim_json) as { ask_max_tier?: string };
+      const askMax = reqScope.ask_max_tier as keyof typeof tierRank | undefined;
+      if (askMax && askMax in tierRank && tierRank[bodyTier as keyof typeof tierRank] > tierRank[askMax]) {
+        return c.json(
+          error(
+            'ASK_EXCEEDS_TIER',
+            `Response body_tier (${bodyTier}) exceeds requester's ask_max_tier (${askMax}). Tier escalation refused server-side.`,
+            403
+          ).body,
+          403
+        );
+      }
+    } catch {
+      // malformed scope_claim_json — let the response through (legacy grace);
+      // log via audit so we can spot it later
+    }
+  }
+
   await c.env.DB.prepare(`
-    INSERT INTO responses (id, request_id, responder_id, claim_id, parent_response_id, body, confidence, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO responses (id, request_id, responder_id, claim_id, parent_response_id, body, confidence, created_at, body_tier)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     responseId,
     requestId,
@@ -267,7 +328,8 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
     input.parent_response_id ?? null,
     input.body,
     input.confidence ?? null,
-    createdAt
+    createdAt,
+    bodyTier
   ).run();
 
   // Transition request status and increment response_count
@@ -291,6 +353,9 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
       request_id: requestId,
       claim_id: claimId,
       parent_response_id: input.parent_response_id ?? null,
+      // v1.1 audit
+      body_tier: bodyTier,
+      request_target_agent_id: request.target_agent_id,
     },
   });
 
