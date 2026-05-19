@@ -63,6 +63,9 @@ export interface HelpRequest {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  // v1.1 — targeted mycelia + scope envelope
+  target_agent_id: string | null;
+  scope_claim_json: string | null;
 }
 
 export type RequestType = 'review' | 'validation' | 'second-opinion' | 'council' | 'fact-check' | 'summarize' | 'translate' | 'debug';
@@ -99,6 +102,8 @@ export interface Response {
   body: string;
   confidence: number | null;
   created_at: string;
+  // v1.1 — declared tier of response content (for audit)
+  body_tier: string | null;
 }
 
 export interface Rating {
@@ -178,7 +183,17 @@ export type ErrorCode =
   | 'CONFLICT'
   | 'RATE_LIMITED'
   | 'GONE'
-  | 'INTERNAL_ERROR';
+  | 'INTERNAL_ERROR'
+  // v1.1 — scope-claim + targeted-mycelia
+  | 'SCOPE_CLAIM_REQUIRED'
+  | 'SCOPE_CLAIM_MALFORMED'
+  | 'INVALID_TIER'
+  | 'ASK_EXCEEDS_TIER'
+  | 'IDENTITY_MISMATCH'
+  | 'STALE_CLAIM'
+  | 'INVALID_SIGNATURE'
+  | 'TARGETED_TO_OTHER_AGENT'
+  | 'AGENT_REVOKED';
 
 // ═══ API Request Bodies ═══
 
@@ -203,6 +218,12 @@ export interface CreateRequestInput {
   context?: string;
   max_responses?: number;
   expires_in_hours?: number;
+  // v1.1 — targeted requests + scope envelope
+  // When `target_agent_id` is set, only that agent may claim.
+  // When null/absent, request is open (v1.0 behavior).
+  target_agent_id?: string;
+  // Required in v1.1 (grace period: tolerated absent w/ warning during rollout)
+  scope_claim?: unknown; // validated by validateScopeClaim()
 }
 
 export interface CreateClaimInput {
@@ -214,6 +235,8 @@ export interface CreateResponseInput {
   body: string;
   confidence?: number;
   parent_response_id?: string;
+  // v1.1 — responder declares the highest tier of content in body
+  body_tier?: 'public' | 'cohort' | 'intimate' | 'sacred';
 }
 
 export interface CreateRatingInput {
