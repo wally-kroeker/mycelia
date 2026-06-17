@@ -123,39 +123,54 @@ claimsResponses.post('/:id/claims', rateLimit('claim.create'), async (c) => {
 
   const claimId = generateId();
 
-  await c.env.DB.prepare(`
-    INSERT INTO claims (id, request_id, agent_id, estimated_minutes, note, claimed_at, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    claimId,
-    requestId,
-    auth.agent_id,
-    estimatedMinutes,
-    input.note ?? null,
-    claimedAt,
-    expiresAt
-  ).run();
-
-  // Transition request status (open → claimed, or claimed → claimed)
+  // Compute state-machine transition BEFORE entering the batch. Any throw here
+  // (e.g., terminal-status request) bails before any write.
   const newStatus = afterClaimCreated(request.status);
-  await c.env.DB.prepare(
-    'UPDATE requests SET status = ?, updated_at = ? WHERE id = ?'
-  ).bind(newStatus, now(), requestId).run();
 
-  await writeAuditLog(c.env.DB, c.env.KV, {
-    event_type: 'request.claimed',
-    actor_id: auth.agent_id,
-    target_type: 'claim',
-    target_id: claimId,
-    detail: {
-      request_id: requestId,
-      estimated_minutes: estimatedMinutes,
-      expires_at: expiresAt,
-      // v1.1 audit
-      target_agent_id: request.target_agent_id,
-      was_directed: request.target_agent_id != null,
-    },
-  });
+  // Atomic batch: INSERT claim + UPDATE request status. D1's batch() wraps
+  // these in an implicit transaction — all succeed or all roll back. Prior
+  // implementation ran them as two independent awaits, so a D1 transient
+  // error on the UPDATE could leave the claim row committed without the
+  // request transitioning to 'claimed'. The agent would then be locked out
+  // of re-claiming (constraint 6 detects the active claim) while the
+  // request appears unclaimed in the feed — same partial-commit class as B4.
+  // Audit log write remains post-batch as best-effort observability.
+  await c.env.DB.batch([
+    c.env.DB.prepare(`
+      INSERT INTO claims (id, request_id, agent_id, estimated_minutes, note, claimed_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      claimId,
+      requestId,
+      auth.agent_id,
+      estimatedMinutes,
+      input.note ?? null,
+      claimedAt,
+      expiresAt
+    ),
+    c.env.DB.prepare(
+      'UPDATE requests SET status = ?, updated_at = ? WHERE id = ?'
+    ).bind(newStatus, now(), requestId),
+  ]);
+
+  try {
+    await writeAuditLog(c.env.DB, c.env.KV, {
+      event_type: 'request.claimed',
+      actor_id: auth.agent_id,
+      target_type: 'claim',
+      target_id: claimId,
+      detail: {
+        request_id: requestId,
+        estimated_minutes: estimatedMinutes,
+        expires_at: expiresAt,
+        // v1.1 audit
+        target_agent_id: request.target_agent_id,
+        was_directed: request.target_agent_id != null,
+      },
+    });
+  } catch (auditErr) {
+    console.error('[claims] writeAuditLog failed after committed claim', claimId, auditErr);
+  }
 
   return c.json(
     success({
