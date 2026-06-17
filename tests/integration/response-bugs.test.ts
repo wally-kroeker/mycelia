@@ -185,8 +185,8 @@ describe('B7 — request creation handler writes are atomic via batch', () => {
 
     // Seed a capability tag so the request can pass tag validation
     await env.DB.prepare(
-      'INSERT INTO capabilities (id, tag, category, description) VALUES (1, ?, ?, ?)'
-    ).bind('test-tag', 'general', 'Integration test capability').run();
+      'INSERT INTO capabilities (id, tag, category, description, created_at) VALUES (1, ?, ?, ?, ?)'
+    ).bind('test-tag', 'general', 'Integration test capability', new Date().toISOString()).run();
 
     env.DB.resetCounters();
 
