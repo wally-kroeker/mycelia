@@ -98,27 +98,38 @@ agents.post('/', requireAgentKey, rateLimit('agent.register'), async (c) => {
   const { key, hash, prefix } = await generateApiKey('agent');
   const timestamp = now();
 
-  // Insert agent
-  await c.env.DB.prepare(
-    `INSERT INTO agents (id, name, description, owner_id, api_key_hash, key_prefix, trust_score,
-      trust_score_as_helper, trust_score_as_requester, status, request_count, response_count, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, 0.5, 0.5, 0.5, 'active', 0, 0, ?)`
-  ).bind(id, input.name, input.description ?? null, input.owner_id, hash, prefix, timestamp).run();
-
-  // Insert agent_capabilities
+  // Atomic batch: INSERT agent + INSERT agent_capabilities (variable count).
+  // Prior implementation ran them as separate awaits, so a mid-sequence
+  // failure could leave an agent registered without their declared
+  // capabilities — undiscoverable via capability matching despite being
+  // an active agent. Audit log post-batch as best-effort.
+  const batchStatements = [
+    c.env.DB.prepare(
+      `INSERT INTO agents (id, name, description, owner_id, api_key_hash, key_prefix, trust_score,
+        trust_score_as_helper, trust_score_as_requester, status, request_count, response_count, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 0.5, 0.5, 0.5, 'active', 0, 0, ?)`
+    ).bind(id, input.name, input.description ?? null, input.owner_id, hash, prefix, timestamp),
+  ];
   for (const cap of capabilityRows) {
-    await c.env.DB.prepare(
-      'INSERT INTO agent_capabilities (agent_id, capability_id, confidence) VALUES (?, ?, ?)'
-    ).bind(id, cap.id, cap.confidence).run();
+    batchStatements.push(
+      c.env.DB.prepare(
+        'INSERT INTO agent_capabilities (agent_id, capability_id, confidence) VALUES (?, ?, ?)'
+      ).bind(id, cap.id, cap.confidence)
+    );
   }
+  await c.env.DB.batch(batchStatements);
 
-  await writeAuditLog(c.env.DB, c.env.KV, {
-    event_type: 'agent.registered',
-    actor_id: id,
-    target_type: 'agent',
-    target_id: id,
-    detail: { name: input.name, owner_id: input.owner_id, capabilities: input.capabilities.map((cap) => cap.tag) }
-  });
+  try {
+    await writeAuditLog(c.env.DB, c.env.KV, {
+      event_type: 'agent.registered',
+      actor_id: id,
+      target_type: 'agent',
+      target_id: id,
+      detail: { name: input.name, owner_id: input.owner_id, capabilities: input.capabilities.map((cap) => cap.tag) }
+    });
+  } catch (auditErr) {
+    console.error('[agents] writeAuditLog failed after committed agent', id, auditErr);
+  }
 
   return c.json(success({
     agent: { id, name: input.name, api_key: key, trust_score: 0.5, created_at: timestamp }
@@ -185,31 +196,45 @@ agents.patch('/:id', requireAgentKey, async (c) => {
        WHERE ac.agent_id = ?`
     ).bind(agentId).all<{ tag: string }>();
     oldTags = oldCaps.results.map((r) => r.tag);
-
-    // Delete and re-insert capabilities
-    await c.env.DB.prepare('DELETE FROM agent_capabilities WHERE agent_id = ?').bind(agentId).run();
-
-    for (const cap of capabilityRows) {
-      await c.env.DB.prepare(
-        'INSERT INTO agent_capabilities (agent_id, capability_id, confidence) VALUES (?, ?, ?)'
-      ).bind(agentId, cap.id, cap.confidence).run();
-    }
   }
 
-  // Build update query for agent row
+  // Build agent row UPDATE if any scalar fields change
   const updates: string[] = [];
   const values: unknown[] = [];
-
   if (input.description !== undefined) {
     updates.push('description = ?');
     values.push(input.description);
   }
 
+  // Atomic batch: DELETE existing agent_capabilities + INSERT new rows +
+  // (optional) UPDATE agents scalar fields. Prior implementation ran the
+  // DELETE before the INSERT loop with no transaction — a failure between
+  // them would wipe the agent's capabilities entirely, leaving them visible
+  // but undiscoverable. This is a real availability hit on the fleet's
+  // capability-matching layer. Batch ensures the swap is atomic.
+  const batchStatements: ReturnType<typeof c.env.DB.prepare>[] = [];
+  if (input.capabilities !== undefined) {
+    batchStatements.push(
+      c.env.DB.prepare('DELETE FROM agent_capabilities WHERE agent_id = ?').bind(agentId)
+    );
+    for (const cap of capabilityRows) {
+      batchStatements.push(
+        c.env.DB.prepare(
+          'INSERT INTO agent_capabilities (agent_id, capability_id, confidence) VALUES (?, ?, ?)'
+        ).bind(agentId, cap.id, cap.confidence)
+      );
+    }
+  }
   if (updates.length > 0) {
     values.push(agentId);
-    await c.env.DB.prepare(
-      `UPDATE agents SET ${updates.join(', ')} WHERE id = ?`
-    ).bind(...values).run();
+    batchStatements.push(
+      c.env.DB.prepare(
+        `UPDATE agents SET ${updates.join(', ')} WHERE id = ?`
+      ).bind(...values)
+    );
+  }
+  if (batchStatements.length > 0) {
+    await c.env.DB.batch(batchStatements);
   }
 
   // Invalidate KV caches for affected tags
