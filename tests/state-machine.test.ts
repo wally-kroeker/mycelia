@@ -27,8 +27,12 @@ describe('canTransition', () => {
   it('allows rated → rated (self)', () => expect(canTransition('rated', 'rated')).toBe(true));
   it('allows rated → closed', () => expect(canTransition('rated', 'closed')).toBe(true));
 
+  // open → responded is the recovery transition added 2026-06-17 to handle
+  // partial-commit recovery (response arrives with valid claim while
+  // request.status hasn't transitioned to 'claimed' yet).
+  it('allows open → responded (recovery)', () => expect(canTransition('open', 'responded')).toBe(true));
+
   // Invalid transitions
-  it('rejects open → responded', () => expect(canTransition('open', 'responded')).toBe(false));
   it('rejects open → rated', () => expect(canTransition('open', 'rated')).toBe(false));
   it('rejects open → closed', () => expect(canTransition('open', 'closed')).toBe(false));
   it('rejects closed → open', () => expect(canTransition('closed', 'open')).toBe(false));
@@ -56,7 +60,9 @@ describe('afterClaimCreated', () => {
 describe('afterResponseSubmitted', () => {
   it('claimed → responded', () => expect(afterResponseSubmitted('claimed')).toBe('responded'));
   it('responded → responded (additional)', () => expect(afterResponseSubmitted('responded')).toBe('responded'));
-  it('throws for open', () => expect(() => afterResponseSubmitted('open')).toThrow(InvalidTransitionError));
+  // open → responded is recovery from partial-commit. The handler-level claim
+  // precondition is the real gate; the state-machine doesn't second-guess it.
+  it('open → responded (recovery from partial-commit)', () => expect(afterResponseSubmitted('open')).toBe('responded'));
   it('rated → rated (keeps state)', () => expect(afterResponseSubmitted('rated')).toBe('rated'));
   it('throws for closed', () => expect(() => afterResponseSubmitted('closed')).toThrow(InvalidTransitionError));
   it('throws for expired', () => expect(() => afterResponseSubmitted('expired')).toThrow(InvalidTransitionError));
