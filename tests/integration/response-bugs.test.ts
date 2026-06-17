@@ -172,6 +172,52 @@ describe('B3 — response to open-status request with valid claim succeeds', () 
   });
 });
 
+describe('B5 — claim handler writes are atomic via batch', () => {
+  it('forensic — claim handler invokes DB.batch() rather than independent .run() calls', async () => {
+    // Pre-B5 the claim handler ran INSERT claims + UPDATE requests as two
+    // independent awaits. A D1 transient on the UPDATE would leave the claim
+    // committed but the request still 'open' — agent locked out of re-claim
+    // (constraint 6 detects active claim) while request appears unclaimed.
+    const { env, agents, requestId } = await setup();
+    const fullEnv = { ...env, ...ENV_EXTRAS };
+
+    env.DB.resetCounters();
+
+    const claimRes = await app.fetch(
+      authReq(`/v1/requests/${requestId}/claims`, agents.responderKey, { estimated_minutes: 10 }),
+      fullEnv
+    );
+    expect(claimRes.status).toBe(201);
+
+    // Post-B5: at least one batch call for the INSERT-claim + UPDATE-request pair.
+    expect(env.DB.batchCalls).toBeGreaterThanOrEqual(1);
+  });
+
+  it('post-condition lockstep — claim creation transitions request status atomically', async () => {
+    const { env, agents, requestId } = await setup();
+    const fullEnv = { ...env, ...ENV_EXTRAS };
+
+    const claimRes = await app.fetch(
+      authReq(`/v1/requests/${requestId}/claims`, agents.responderKey, { estimated_minutes: 10 }),
+      fullEnv
+    );
+    expect(claimRes.status).toBe(201);
+
+    const claimRow = await env.DB.prepare(
+      `SELECT status FROM claims WHERE request_id = ? AND agent_id = ?`
+    ).bind(requestId, agents.responderId).first<{ status: string }>();
+    const reqRow = await env.DB.prepare(
+      `SELECT status FROM requests WHERE id = ?`
+    ).bind(requestId).first<{ status: string }>();
+
+    // Either both succeeded (active + claimed) or batch rolled back (no claim row).
+    // The "claim active but request still open" partial-commit state is what
+    // pre-B5 could produce. Post-B5 this never happens.
+    expect(claimRow?.status).toBe('active');
+    expect(reqRow?.status).toBe('claimed');
+  });
+});
+
 describe('B4 — response handler writes are atomic via batch', () => {
   it('forensic — response handler invokes DB.batch() rather than independent .run() calls', async () => {
     // Forensic test that fails against pre-fix code: pre-B4 the handler ran
