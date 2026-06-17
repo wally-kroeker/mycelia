@@ -120,67 +120,54 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
   const timestamp = now();
   const expiresAt = new Date(Date.now() + expiresInHours * 3600 * 1000).toISOString();
 
-  // Atomic batch: INSERT requests + INSERT request_tags (variable count) +
-  // UPDATE agents request_count. D1's batch() wraps these in an implicit
-  // transaction — all succeed or all roll back. Prior implementation ran
-  // them as separate awaits; a mid-sequence failure (e.g., D1 transient
-  // after INSERT requests but before request_tags) would leave a request
-  // undiscoverable via capability matching. Audit log stays post-batch as
-  // best-effort observability.
-  const batchStatements = [
-    c.env.DB.prepare(`
-      INSERT INTO requests (id, requester_id, title, body, request_type, priority,
-                            max_responses, context, expires_at, created_at, updated_at,
-                            target_agent_id, scope_claim_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      id,
-      auth.agent_id,
-      input.title,
-      input.body,
-      input.request_type,
-      priority,
-      maxResponses,
-      input.context ?? null,
-      expiresAt,
-      timestamp,
-      timestamp,
-      targetAgentId,
-      scopeClaimJson
-    ),
-  ];
-  for (const capId of capabilityIds) {
-    batchStatements.push(
-      c.env.DB.prepare(
-        'INSERT INTO request_tags (request_id, capability_id) VALUES (?, ?)'
-      ).bind(id, capId)
-    );
-  }
-  batchStatements.push(
-    c.env.DB.prepare(
-      'UPDATE agents SET request_count = request_count + 1 WHERE id = ?'
-    ).bind(auth.agent_id)
-  );
-  await c.env.DB.batch(batchStatements);
+  // Insert request row (v1.1: includes target_agent_id + scope_claim_json)
+  await c.env.DB.prepare(`
+    INSERT INTO requests (id, requester_id, title, body, request_type, priority,
+                          max_responses, context, expires_at, created_at, updated_at,
+                          target_agent_id, scope_claim_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    id,
+    auth.agent_id,
+    input.title,
+    input.body,
+    input.request_type,
+    priority,
+    maxResponses,
+    input.context ?? null,
+    expiresAt,
+    timestamp,
+    timestamp,
+    targetAgentId,
+    scopeClaimJson
+  ).run();
 
-  try {
-    await writeAuditLog(c.env.DB, c.env.KV, {
-      event_type: 'request.created',
-      actor_id: auth.agent_id,
-      target_type: 'request',
-      target_id: id,
-      detail: {
-        title: input.title,
-        type: input.request_type,
-        tags: input.tags,
-        // v1.1 audit fields
-        target_agent_id: targetAgentId,
-        scope_claim: scopeClaimJson ? JSON.parse(scopeClaimJson) : null,
-      }
-    });
-  } catch (auditErr) {
-    console.error('[requests] writeAuditLog failed after committed request', id, auditErr);
+  // Insert request_tags rows
+  for (const capId of capabilityIds) {
+    await c.env.DB.prepare(
+      'INSERT INTO request_tags (request_id, capability_id) VALUES (?, ?)'
+    ).bind(id, capId).run();
   }
+
+  // Increment agent's request_count
+  await c.env.DB.prepare(
+    'UPDATE agents SET request_count = request_count + 1 WHERE id = ?'
+  ).bind(auth.agent_id).run();
+
+  await writeAuditLog(c.env.DB, c.env.KV, {
+    event_type: 'request.created',
+    actor_id: auth.agent_id,
+    target_type: 'request',
+    target_id: id,
+    detail: {
+      title: input.title,
+      type: input.request_type,
+      tags: input.tags,
+      // v1.1 audit fields
+      target_agent_id: targetAgentId,
+      scope_claim: scopeClaimJson ? JSON.parse(scopeClaimJson) : null,
+    }
+  });
 
   return c.json(success({ request: { id, status: 'open', created_at: timestamp } }), 201);
 });
