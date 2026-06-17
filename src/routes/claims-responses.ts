@@ -210,6 +210,48 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
     );
   }
 
+  // Validate body_tier (enum + sacred refusal + ask_max_tier escalation) BEFORE
+  // any claim-state mutation. Prior ordering marked the claim 'completed' first,
+  // then ran tier validation — a tier failure left a zombie claim row with no
+  // recorded response, and re-claim attempts hit a state-machine 500.
+  const validTiers = ['public', 'cohort', 'intimate', 'sacred'] as const;
+  const tierRank = { public: 0, cohort: 1, intimate: 2, sacred: 3 } as const;
+  const bodyTier = input.body_tier ?? 'public';
+  if (!validTiers.includes(bodyTier as any)) {
+    return c.json(
+      error('VALIDATION_ERROR', `body_tier must be one of: ${validTiers.join(', ')}`, 400).body,
+      400
+    );
+  }
+  if (bodyTier === 'sacred') {
+    return c.json(
+      error(
+        'FORBIDDEN',
+        'sacred-tier content cannot be transmitted over mycelia; direct Rob session required',
+        403
+      ).body,
+      403
+    );
+  }
+  if (request.scope_claim_json) {
+    try {
+      const reqScope = JSON.parse(request.scope_claim_json) as { ask_max_tier?: string };
+      const askMax = reqScope.ask_max_tier as keyof typeof tierRank | undefined;
+      if (askMax && askMax in tierRank && tierRank[bodyTier as keyof typeof tierRank] > tierRank[askMax]) {
+        return c.json(
+          error(
+            'ASK_EXCEEDS_TIER',
+            `Response body_tier (${bodyTier}) exceeds requester's ask_max_tier (${askMax}). Tier escalation refused server-side.`,
+            403
+          ).body,
+          403
+        );
+      }
+    } catch {
+      // malformed scope_claim_json — let the response through (legacy grace)
+    }
+  }
+
   let claimId: string | null = null;
   const isCouncilFollowUp =
     request.request_type === 'council' && !!input.parent_response_id;
@@ -247,7 +289,10 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
 
     claimId = claim.id;
 
-    // Mark claim as completed
+    // Mark claim as completed — must stay AFTER all validation that could refuse
+    // the response. Anything that returns before this line is safe; anything
+    // added between this and the responses INSERT below risks re-introducing the
+    // zombie-claim class.
     await c.env.DB.prepare(
       `UPDATE claims SET status = 'completed', completed_at = ? WHERE id = ?`
     ).bind(now(), claimId).run();
