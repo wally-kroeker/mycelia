@@ -317,47 +317,61 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
   const responseId = generateId();
   const createdAt = now();
 
-  await c.env.DB.prepare(`
-    INSERT INTO responses (id, request_id, responder_id, claim_id, parent_response_id, body, confidence, created_at, body_tier)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    responseId,
-    requestId,
-    auth.agent_id,
-    claimId,
-    input.parent_response_id ?? null,
-    input.body,
-    input.confidence ?? null,
-    createdAt,
-    bodyTier
-  ).run();
-
-  // Transition request status and increment response_count
+  // Compute state-machine transition BEFORE entering the batch. Any throw here
+  // (e.g., terminal-status request) bails before any write, so no partial commit.
   const newStatus = afterResponseSubmitted(request.status);
-  await c.env.DB.prepare(
-    'UPDATE requests SET status = ?, response_count = response_count + 1, updated_at = ? WHERE id = ?'
-  ).bind(newStatus, now(), requestId).run();
 
-  // Increment agent response_count
-  await c.env.DB.prepare(
-    'UPDATE agents SET response_count = response_count + 1 WHERE id = ?'
-  ).bind(auth.agent_id).run();
+  // Atomic batch: INSERT response + UPDATE request + UPDATE agent. D1's batch()
+  // wraps these in an implicit transaction — all succeed or all roll back.
+  // Prior implementation ran the three writes as independent awaits, so a
+  // throw between INSERT and the UPDATEs left committed responses with stale
+  // request/agent counters (and request.status stuck on its pre-response
+  // value). Today's originating incident is a worked example.
+  await c.env.DB.batch([
+    c.env.DB.prepare(`
+      INSERT INTO responses (id, request_id, responder_id, claim_id, parent_response_id, body, confidence, created_at, body_tier)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      responseId,
+      requestId,
+      auth.agent_id,
+      claimId,
+      input.parent_response_id ?? null,
+      input.body,
+      input.confidence ?? null,
+      createdAt,
+      bodyTier
+    ),
+    c.env.DB.prepare(
+      'UPDATE requests SET status = ?, response_count = response_count + 1, updated_at = ? WHERE id = ?'
+    ).bind(newStatus, now(), requestId),
+    c.env.DB.prepare(
+      'UPDATE agents SET response_count = response_count + 1 WHERE id = ?'
+    ).bind(auth.agent_id),
+  ]);
 
-  const eventType = isCouncilFollowUp ? 'response.council_reply' : 'response.created';
-  await writeAuditLog(c.env.DB, c.env.KV, {
-    event_type: eventType,
-    actor_id: auth.agent_id,
-    target_type: 'response',
-    target_id: responseId,
-    detail: {
-      request_id: requestId,
-      claim_id: claimId,
-      parent_response_id: input.parent_response_id ?? null,
-      // v1.1 audit
-      body_tier: bodyTier,
-      request_target_agent_id: request.target_agent_id,
-    },
-  });
+  // Audit log writes happen after the batch commits. If audit throws, the
+  // response is already durable — we don't roll back user-visible work for
+  // an observability failure. Errors logged for later inspection.
+  try {
+    const eventType = isCouncilFollowUp ? 'response.council_reply' : 'response.created';
+    await writeAuditLog(c.env.DB, c.env.KV, {
+      event_type: eventType,
+      actor_id: auth.agent_id,
+      target_type: 'response',
+      target_id: responseId,
+      detail: {
+        request_id: requestId,
+        claim_id: claimId,
+        parent_response_id: input.parent_response_id ?? null,
+        // v1.1 audit
+        body_tier: bodyTier,
+        request_target_agent_id: request.target_agent_id,
+      },
+    });
+  } catch (auditErr) {
+    console.error('[responses] writeAuditLog failed after committed response', responseId, auditErr);
+  }
 
   return c.json(
     success({
