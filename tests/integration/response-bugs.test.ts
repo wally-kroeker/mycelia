@@ -172,6 +172,48 @@ describe('B3 — response to open-status request with valid claim succeeds', () 
   });
 });
 
+describe('B7 — request creation handler writes are atomic via batch', () => {
+  it('forensic — POST /v1/requests invokes DB.batch() rather than independent .run() calls', async () => {
+    // Pre-B7 the request handler ran INSERT requests + INSERT request_tags
+    // (N iterations) + UPDATE agents as independent awaits. A mid-sequence
+    // failure could leave a request without its capability tags, making it
+    // undiscoverable via capability matching.
+    const env = createTestEnv();
+    applyMigrationsSync(env);
+    const agents = await seedAgents(env);
+    const fullEnv = { ...env, ...ENV_EXTRAS };
+
+    // Seed a capability tag so the request can pass tag validation
+    await env.DB.prepare(
+      'INSERT INTO capabilities (id, tag, category, description) VALUES (1, ?, ?, ?)'
+    ).bind('test-tag', 'general', 'Integration test capability').run();
+
+    env.DB.resetCounters();
+
+    const reqRes = await app.fetch(
+      new Request('http://test.local/v1/requests', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${agents.requesterKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: 'Integration test request title',
+          body: 'A request body that is at least twenty characters long for the validator.',
+          request_type: 'second-opinion',
+          tags: ['test-tag'],
+        }),
+      }),
+      fullEnv
+    );
+    expect(reqRes.status).toBe(201);
+
+    // Post-B7: at least one batch call wrapping the INSERT-request +
+    // request_tags + UPDATE-agents triple.
+    expect(env.DB.batchCalls).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe('B5 — claim handler writes are atomic via batch', () => {
   it('forensic — claim handler invokes DB.batch() rather than independent .run() calls', async () => {
     // Pre-B5 the claim handler ran INSERT claims + UPDATE requests as two
