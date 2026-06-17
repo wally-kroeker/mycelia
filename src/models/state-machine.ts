@@ -21,6 +21,11 @@ const REQUEST_TRANSITIONS: TransitionRule[] = [
   { from: 'open', to: 'claimed', trigger: 'claim_created', condition: 'not_expired_and_under_max' },
   { from: 'open', to: 'cancelled', trigger: 'requester_cancels', condition: 'zero_responses' },
   { from: 'open', to: 'expired', trigger: 'cron_expiry', condition: 'past_expires_at' },
+  // open → responded is a recovery transition: a response with a valid active
+  // claim may arrive while request.status is still 'open' if a prior claim's
+  // request-status UPDATE partially-committed. The claim-precondition check is
+  // the real gate; status here is a downstream record.
+  { from: 'open', to: 'responded', trigger: 'response_submitted', condition: 'has_valid_active_claim' },
   { from: 'claimed', to: 'open', trigger: 'all_claims_expired', condition: 'zero_responses_and_no_active_claims' },
   { from: 'claimed', to: 'responded', trigger: 'response_submitted' },
   { from: 'claimed', to: 'cancelled', trigger: 'requester_cancels', condition: 'zero_responses' },
@@ -61,12 +66,21 @@ export function afterClaimCreated(currentStatus: RequestStatus): RequestStatus {
 
 /**
  * Determine the next request status after a response is submitted.
- * Accepts claimed, responded, or rated — new responses don't regress state.
+ * Accepts open, claimed, responded, or rated — new responses don't regress state.
+ *
+ * 'open' is accepted because the response handler already enforces the claim
+ * precondition independently (active, non-expired claim row for the responder).
+ * Refusing here based purely on request.status caused 500s when a prior claim
+ * had partially-committed: the claim row was active but UPDATE requests had
+ * thrown silently, leaving request.status='open' while a valid response was
+ * incoming. Trust the claim check, not the request status.
  */
 export function afterResponseSubmitted(currentStatus: RequestStatus): RequestStatus {
-  if (currentStatus === 'claimed' || currentStatus === 'responded') return 'responded';
   if (currentStatus === 'rated') return 'rated'; // Don't regress from rated
-  throw new InvalidTransitionError(currentStatus, 'responded', 'Can only respond to claimed, responded, or rated requests');
+  if (currentStatus === 'open' || currentStatus === 'claimed' || currentStatus === 'responded') {
+    return 'responded';
+  }
+  throw new InvalidTransitionError(currentStatus, 'responded', `Cannot respond to a request in terminal status '${currentStatus}'`);
 }
 
 /**
