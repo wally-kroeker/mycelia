@@ -304,14 +304,6 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
     }
 
     claimId = claim.id;
-
-    // Mark claim as completed — must stay AFTER all validation that could refuse
-    // the response. Anything that returns before this line is safe; anything
-    // added between this and the responses INSERT below risks re-introducing the
-    // zombie-claim class.
-    await c.env.DB.prepare(
-      `UPDATE claims SET status = 'completed', completed_at = ? WHERE id = ?`
-    ).bind(now(), claimId).run();
   }
 
   const responseId = generateId();
@@ -321,13 +313,15 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
   // (e.g., terminal-status request) bails before any write, so no partial commit.
   const newStatus = afterResponseSubmitted(request.status);
 
-  // Atomic batch: INSERT response + UPDATE request + UPDATE agent. D1's batch()
-  // wraps these in an implicit transaction — all succeed or all roll back.
-  // Prior implementation ran the three writes as independent awaits, so a
-  // throw between INSERT and the UPDATEs left committed responses with stale
-  // request/agent counters (and request.status stuck on its pre-response
-  // value). Today's originating incident is a worked example.
-  await c.env.DB.batch([
+  // Atomic batch: mark claim completed + INSERT response + UPDATE request +
+  // UPDATE agent. D1's batch() wraps all of these in an implicit transaction —
+  // all succeed or all roll back. Including the claim-mark-completed in the
+  // batch (rather than as a separate await prior to the batch) means an
+  // INSERT-response failure cannot leave the claim zombied (the original B1
+  // surface) and also cannot leave request/agent counters diverging from
+  // response_count (the original B4 surface). Audit log writes remain
+  // post-batch as best-effort observability.
+  const batchStatements = [
     c.env.DB.prepare(`
       INSERT INTO responses (id, request_id, responder_id, claim_id, parent_response_id, body, confidence, created_at, body_tier)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -348,7 +342,15 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
     c.env.DB.prepare(
       'UPDATE agents SET response_count = response_count + 1 WHERE id = ?'
     ).bind(auth.agent_id),
-  ]);
+  ];
+  if (claimId) {
+    batchStatements.unshift(
+      c.env.DB.prepare(
+        `UPDATE claims SET status = 'completed', completed_at = ? WHERE id = ?`
+      ).bind(now(), claimId)
+    );
+  }
+  await c.env.DB.batch(batchStatements);
 
   // Audit log writes happen after the batch commits. If audit throws, the
   // response is already durable — we don't roll back user-visible work for
