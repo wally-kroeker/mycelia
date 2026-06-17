@@ -183,9 +183,10 @@ describe('B7 — request creation handler writes are atomic via batch', () => {
     const agents = await seedAgents(env);
     const fullEnv = { ...env, ...ENV_EXTRAS };
 
-    // Seed a capability tag so the request can pass tag validation
+    // Seed a capability tag so the request can pass tag validation.
+    // Let AUTOINCREMENT pick the id so re-run / repeat-invocation is safe.
     await env.DB.prepare(
-      'INSERT INTO capabilities (id, tag, category, description, created_at) VALUES (1, ?, ?, ?, ?)'
+      'INSERT INTO capabilities (tag, category, description, created_at) VALUES (?, ?, ?, ?)'
     ).bind('test-tag', 'general', 'Integration test capability', new Date().toISOString()).run();
 
     env.DB.resetCounters();
