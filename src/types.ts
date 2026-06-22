@@ -8,6 +8,10 @@ export interface Env {
   R2_AUDIT?: R2Bucket; // Optional — enable R2 in CF dashboard first
   ENVIRONMENT: string;
   ADMIN_API_KEY?: string;
+  // ADMIN_OWNER_ID — owner_id authorized for admin actions (revoke / unrevoke).
+  // Defaults to 'rob-chuvala' if unset so the upstream fork keeps working;
+  // downstream operators set this to their own owner_id in wrangler.toml.
+  ADMIN_OWNER_ID?: string;
 }
 
 // ═══ Database Entities ═══

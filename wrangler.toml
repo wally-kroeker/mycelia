@@ -9,6 +9,9 @@ enabled = true
 
 [vars]
 ENVIRONMENT = "production"
+# ADMIN_OWNER_ID — owner_id authorized for revoke/unrevoke admin actions.
+# Downstream operators MUST set this to their own owner_id.
+ADMIN_OWNER_ID = "rob-chuvala"
 
 [[d1_databases]]
 binding = "DB"

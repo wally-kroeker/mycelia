@@ -305,13 +305,15 @@ agents.post('/:id/revoke', requireAgentKey, async (c) => {
   const auth = c.get('auth');
   const id = c.req.param('id');
 
-  // Authorization: self-revoke or rob (owner_id == rob-chuvala on the admin agent)
-  // We treat the caller's resolved agent as authoritative on self-revoke.
-  // For Rob admin we check the auth's owner_id.
+  // Authorization: self-revoke or admin (owner_id == ADMIN_OWNER_ID).
+  // Self-revoke uses the caller's resolved agent as authoritative.
+  // Admin is configured via the ADMIN_OWNER_ID env var; defaults to
+  // 'rob-chuvala' for the upstream fork.
+  const adminOwnerId = c.env.ADMIN_OWNER_ID ?? 'rob-chuvala';
   const isSelf = auth.agent_id === id;
-  const isAdmin = auth.owner_id === 'rob-chuvala';
+  const isAdmin = auth.owner_id === adminOwnerId;
   if (!isSelf && !isAdmin) {
-    return c.json(error('FORBIDDEN', 'Only the agent itself or rob-chuvala may revoke', 403).body, 403);
+    return c.json(error('FORBIDDEN', 'Only the agent itself or the admin owner may revoke', 403).body, 403);
   }
 
   let body: { reason?: string; revoke_until?: string };
@@ -369,8 +371,9 @@ agents.delete('/:id/revoke', requireAgentKey, async (c) => {
   const auth = c.get('auth');
   const id = c.req.param('id');
 
-  if (auth.owner_id !== 'rob-chuvala') {
-    return c.json(error('FORBIDDEN', 'Only rob-chuvala may lift a revocation', 403).body, 403);
+  const adminOwnerId = c.env.ADMIN_OWNER_ID ?? 'rob-chuvala';
+  if (auth.owner_id !== adminOwnerId) {
+    return c.json(error('FORBIDDEN', 'Only the admin owner may lift a revocation', 403).body, 403);
   }
 
   await unrevoke(c.env.KV, id);
