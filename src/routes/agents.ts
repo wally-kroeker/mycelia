@@ -338,4 +338,6 @@ agents.get('/:id', async (c) => {
   return c.json(success({ agent: { ...agent, capabilities: capabilities.results } }));
 });
 
+
+
 export default agents;

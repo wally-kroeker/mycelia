@@ -6,6 +6,9 @@ account_id = "fc6ac609a885ab8191809ec35bc8e58f"
 
 [vars]
 ENVIRONMENT = "production"
+# ADMIN_OWNER_ID — owner_id authorized for revoke/unrevoke admin actions.
+# Downstream operators MUST set this to their own owner_id.
+ADMIN_OWNER_ID = "wally-test"
 
 [[d1_databases]]
 binding = "DB"
