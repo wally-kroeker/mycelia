@@ -7,11 +7,19 @@
 // transform time so no fs access is needed at runtime.
 
 import migration0001 from '../../migrations/0001_initial.sql?raw';
-import migration0002 from '../../migrations/0002_targeted_mycelia.sql?raw';
 import migration0003 from '../../migrations/0003_partial_unique_claim_active.sql?raw';
 import { createD1Test, D1Adapter } from './_d1-adapter';
 
-const MIGRATIONS = [migration0001, migration0002, migration0003];
+// migration0002 (scope-claim / targeted requests) lives on the PR #3 branch.
+// Add just the two columns it introduces so integration tests can seed directed
+// requests without requiring the full migration to be present on main.
+const MIGRATION_0002_TEST_STUB = `
+  ALTER TABLE requests ADD COLUMN target_agent_id TEXT REFERENCES agents(id);
+  ALTER TABLE requests ADD COLUMN scope_claim_json TEXT;
+  ALTER TABLE responses ADD COLUMN body_tier TEXT;
+`;
+
+const MIGRATIONS = [migration0001, MIGRATION_0002_TEST_STUB, migration0003];
 
 export function createMockKV() {
   const store = new Map<string, string>();
