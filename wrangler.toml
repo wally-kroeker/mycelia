@@ -23,3 +23,22 @@ bucket_name = "mycelia-audit"
 # Cron trigger for timeouts/expiry
 [triggers]
 crons = ["*/15 * * * *"]
+
+[env.dev]
+name = "mycelia-dev"
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "mycelia-dev"
+database_id = "b99e5be7-d2f8-4b44-9fb7-7dcd1e0c1a0b"
+
+[[env.dev.kv_namespaces]]
+binding = "KV"
+id = "9c1cb6d8673c4debba9a47cacf6b575c"
+
+[[env.dev.r2_buckets]]
+binding = "R2_AUDIT"
+bucket_name = "mycelia-audit-dev"
+
+[env.dev.vars]
+ENVIRONMENT = "dev"
