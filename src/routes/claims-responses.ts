@@ -41,6 +41,19 @@ claimsResponses.post('/:id/claims', rateLimit('claim.create'), async (c) => {
     return c.json(error('FORBIDDEN', 'Cannot claim your own request', 403).body, 403);
   }
 
+  // Constraint 1b (v1.1): If request is targeted, only the target may claim.
+  // F1 cheap-fix from the combined redteam: directed requests bind to one agent.
+  if (request.target_agent_id != null && request.target_agent_id !== auth.agent_id) {
+    return c.json(
+      error(
+        'TARGETED_TO_OTHER_AGENT',
+        `This request is directed to agent ${request.target_agent_id}; you are ${auth.agent_id}. Other agents may not claim.`,
+        403
+      ).body,
+      403
+    );
+  }
+
   // Constraint 2: Request must not be in a terminal state
   const terminalStates = ['closed', 'expired', 'cancelled'];
   if (terminalStates.includes(request.status)) {
@@ -110,18 +123,10 @@ claimsResponses.post('/:id/claims', rateLimit('claim.create'), async (c) => {
 
   const claimId = generateId();
 
-  // Compute state-machine transition BEFORE entering the batch. Any throw here
-  // (e.g., terminal-status request) bails before any write.
+  // Compute state-machine transition BEFORE entering the batch.
   const newStatus = afterClaimCreated(request.status);
 
-  // Atomic batch: INSERT claim + UPDATE request status. D1's batch() wraps
-  // these in an implicit transaction — all succeed or all roll back. Prior
-  // implementation ran them as two independent awaits, so a D1 transient
-  // error on the UPDATE could leave the claim row committed without the
-  // request transitioning to 'claimed'. The agent would then be locked out
-  // of re-claiming (constraint 6 detects the active claim) while the
-  // request appears unclaimed in the feed — same partial-commit class as B4.
-  // Audit log write remains post-batch as best-effort observability.
+  // Atomic batch: INSERT claim + UPDATE request status (B5 fix preserved).
   await c.env.DB.batch([
     c.env.DB.prepare(`
       INSERT INTO claims (id, request_id, agent_id, estimated_minutes, note, claimed_at, expires_at)
@@ -150,6 +155,9 @@ claimsResponses.post('/:id/claims', rateLimit('claim.create'), async (c) => {
         request_id: requestId,
         estimated_minutes: estimatedMinutes,
         expires_at: expiresAt,
+        // v1.1 audit
+        target_agent_id: request.target_agent_id,
+        was_directed: request.target_agent_id != null,
       },
     });
   } catch (auditErr) {
@@ -225,48 +233,6 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
     );
   }
 
-  // Validate body_tier (enum + sacred refusal + ask_max_tier escalation) BEFORE
-  // any claim-state mutation. Prior ordering marked the claim 'completed' first,
-  // then ran tier validation — a tier failure left a zombie claim row with no
-  // recorded response, and re-claim attempts hit a state-machine 500.
-  const validTiers = ['public', 'cohort', 'intimate', 'sacred'] as const;
-  const tierRank = { public: 0, cohort: 1, intimate: 2, sacred: 3 } as const;
-  const bodyTier = input.body_tier ?? 'public';
-  if (!validTiers.includes(bodyTier as any)) {
-    return c.json(
-      error('VALIDATION_ERROR', `body_tier must be one of: ${validTiers.join(', ')}`, 400).body,
-      400
-    );
-  }
-  if (bodyTier === 'sacred') {
-    return c.json(
-      error(
-        'FORBIDDEN',
-        'sacred-tier content cannot be transmitted over mycelia; direct Rob session required',
-        403
-      ).body,
-      403
-    );
-  }
-  if (request.scope_claim_json) {
-    try {
-      const reqScope = JSON.parse(request.scope_claim_json) as { ask_max_tier?: string };
-      const askMax = reqScope.ask_max_tier as keyof typeof tierRank | undefined;
-      if (askMax && askMax in tierRank && tierRank[bodyTier as keyof typeof tierRank] > tierRank[askMax]) {
-        return c.json(
-          error(
-            'ASK_EXCEEDS_TIER',
-            `Response body_tier (${bodyTier}) exceeds requester's ask_max_tier (${askMax}). Tier escalation refused server-side.`,
-            403
-          ).body,
-          403
-        );
-      }
-    } catch {
-      // malformed scope_claim_json — let the response through (legacy grace)
-    }
-  }
-
   let claimId: string | null = null;
   const isCouncilFollowUp =
     request.request_type === 'council' && !!input.parent_response_id;
@@ -303,23 +269,64 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
     }
 
     claimId = claim.id;
+
+    // claim-mark-completed goes into the batch below (B1/B4 fix: no zombie claims)
   }
 
   const responseId = generateId();
   const createdAt = now();
 
-  // Compute state-machine transition BEFORE entering the batch. Any throw here
-  // (e.g., terminal-status request) bails before any write, so no partial commit.
+  // v1.1 body_tier: responder declares the highest tier of content in body.
+  // Validated against enum; sacred refused at fleet boundary.
+  const validTiers = ['public', 'cohort', 'intimate', 'sacred'] as const;
+  const tierRank = { public: 0, cohort: 1, intimate: 2, sacred: 3 } as const;
+  const bodyTier = input.body_tier ?? 'public';
+  if (!validTiers.includes(bodyTier as any)) {
+    return c.json(
+      error('VALIDATION_ERROR', `body_tier must be one of: ${validTiers.join(', ')}`, 400).body,
+      400
+    );
+  }
+  if (bodyTier === 'sacred') {
+    return c.json(
+      error(
+        'FORBIDDEN',
+        'sacred-tier content cannot be transmitted over mycelia; direct Rob session required',
+        403
+      ).body,
+      403
+    );
+  }
+
+  // v1.1 server-side F1 enforcement (added 2026-05-18 second pass):
+  // Responder may not return a higher tier than the requester asked for.
+  // Closes the previously-convention enforcement gap.
+  if (request.scope_claim_json) {
+    try {
+      const reqScope = JSON.parse(request.scope_claim_json) as { ask_max_tier?: string };
+      const askMax = reqScope.ask_max_tier as keyof typeof tierRank | undefined;
+      if (askMax && askMax in tierRank && tierRank[bodyTier as keyof typeof tierRank] > tierRank[askMax]) {
+        return c.json(
+          error(
+            'ASK_EXCEEDS_TIER',
+            `Response body_tier (${bodyTier}) exceeds requester's ask_max_tier (${askMax}). Tier escalation refused server-side.`,
+            403
+          ).body,
+          403
+        );
+      }
+    } catch {
+      // malformed scope_claim_json — let the response through (legacy grace);
+      // log via audit so we can spot it later
+    }
+  }
+
+  // Compute state-machine transition BEFORE entering the batch.
   const newStatus = afterResponseSubmitted(request.status);
 
   // Atomic batch: mark claim completed + INSERT response + UPDATE request +
-  // UPDATE agent. D1's batch() wraps all of these in an implicit transaction —
-  // all succeed or all roll back. Including the claim-mark-completed in the
-  // batch (rather than as a separate await prior to the batch) means an
-  // INSERT-response failure cannot leave the claim zombied (the original B1
-  // surface) and also cannot leave request/agent counters diverging from
-  // response_count (the original B4 surface). Audit log writes remain
-  // post-batch as best-effort observability.
+  // UPDATE agent. D1's batch() wraps all in implicit transaction (B4 fix preserved).
+  // Audit log remains post-batch as best-effort observability.
   const batchStatements = [
     c.env.DB.prepare(`
       INSERT INTO responses (id, request_id, responder_id, claim_id, parent_response_id, body, confidence, created_at, body_tier)
@@ -351,9 +358,6 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
   }
   await c.env.DB.batch(batchStatements);
 
-  // Audit log writes happen after the batch commits. If audit throws, the
-  // response is already durable — we don't roll back user-visible work for
-  // an observability failure. Errors logged for later inspection.
   try {
     const eventType = isCouncilFollowUp ? 'response.council_reply' : 'response.created';
     await writeAuditLog(c.env.DB, c.env.KV, {
@@ -365,6 +369,7 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
         request_id: requestId,
         claim_id: claimId,
         parent_response_id: input.parent_response_id ?? null,
+        // v1.1 audit
         body_tier: bodyTier,
         request_target_agent_id: request.target_agent_id,
       },

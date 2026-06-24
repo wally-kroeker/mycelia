@@ -6,6 +6,7 @@ import { parsePagination, paginatedQuery } from '../lib/db';
 import { success, error, generateId, now } from '../lib/utils';
 import { afterCancel, InvalidTransitionError } from '../models/state-machine';
 import { rateLimit } from '../middleware/rate-limit';
+import { validateScopeClaim } from '../lib/scope-claim';
 
 const requests = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
 
@@ -75,22 +76,59 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
     capabilityIds.push(cap.id);
   }
 
+  // v1.1 — validate scope_claim (required after grace period; tolerated absent during rollout)
+  let scopeClaimJson: string | null = null;
+  if (input.scope_claim !== undefined && input.scope_claim !== null) {
+    const v = validateScopeClaim(input.scope_claim, auth.agent_id);
+    if (!v.ok) {
+      return c.json(error(v.code, v.message, 400).body, 400);
+    }
+    scopeClaimJson = JSON.stringify(v.claim);
+  } else {
+    // Grace period: synthesize a public-tier claim for legacy clients, log a warning.
+    // After 2-week grace period (target 2026-06-01), promote to hard SCOPE_CLAIM_REQUIRED.
+    scopeClaimJson = JSON.stringify({
+      requester: 'legacy-client',
+      agent_id: auth.agent_id,
+      tier: 'public',
+      ask_max_tier: 'public',
+      ts: now(),
+      _grace_synthesized: true,
+    });
+    console.warn(`[mycelia v1.1 grace] request from ${auth.agent_id} missing scope_claim; synthesized public-tier`);
+  }
+
+  // v1.1 — validate target_agent_id if present (must be a real, active agent)
+  let targetAgentId: string | null = null;
+  if (input.target_agent_id !== undefined && input.target_agent_id !== null) {
+    if (typeof input.target_agent_id !== 'string' || input.target_agent_id.length === 0) {
+      return c.json(error('VALIDATION_ERROR', 'target_agent_id must be a non-empty string', 400).body, 400);
+    }
+    const target = await c.env.DB.prepare(
+      'SELECT id, status FROM agents WHERE id = ?'
+    ).bind(input.target_agent_id).first<{ id: string; status: string }>();
+    if (!target) {
+      return c.json(error('VALIDATION_ERROR', `target_agent_id not found: ${input.target_agent_id}`, 400).body, 400);
+    }
+    if (target.status !== 'active') {
+      return c.json(error('VALIDATION_ERROR', `target_agent_id is not active (status: ${target.status})`, 400).body, 400);
+    }
+    targetAgentId = target.id;
+  }
+
   const id = generateId();
   const timestamp = now();
   const expiresAt = new Date(Date.now() + expiresInHours * 3600 * 1000).toISOString();
 
-  // Atomic batch: INSERT requests + INSERT request_tags (variable count) +
-  // UPDATE agents request_count. D1's batch() wraps these in an implicit
-  // transaction — all succeed or all roll back. Prior implementation ran
-  // them as separate awaits; a mid-sequence failure (e.g., D1 transient
-  // after INSERT requests but before request_tags) would leave a request
-  // undiscoverable via capability matching. Audit log stays post-batch as
-  // best-effort observability.
+  // Atomic batch: INSERT requests (v1.1: target_agent_id + scope_claim_json) +
+  // INSERT request_tags + UPDATE agents request_count. D1's batch() wraps these
+  // in an implicit transaction — all succeed or all roll back (B7 fix preserved).
   const batchStatements = [
     c.env.DB.prepare(`
       INSERT INTO requests (id, requester_id, title, body, request_type, priority,
-                            max_responses, context, expires_at, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            max_responses, context, expires_at, created_at, updated_at,
+                            target_agent_id, scope_claim_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       auth.agent_id,
@@ -102,7 +140,9 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
       input.context ?? null,
       expiresAt,
       timestamp,
-      timestamp
+      timestamp,
+      targetAgentId,
+      scopeClaimJson
     ),
   ];
   for (const capId of capabilityIds) {
@@ -125,7 +165,14 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
       actor_id: auth.agent_id,
       target_type: 'request',
       target_id: id,
-      detail: { title: input.title, type: input.request_type, tags: input.tags }
+      detail: {
+        title: input.title,
+        type: input.request_type,
+        tags: input.tags,
+        // v1.1 audit fields
+        target_agent_id: targetAgentId,
+        scope_claim: scopeClaimJson ? JSON.parse(scopeClaimJson) : null,
+      }
     });
   } catch (auditErr) {
     console.error('[requests] writeAuditLog failed after committed request', id, auditErr);
@@ -178,7 +225,7 @@ requests.get('/', rateLimit('read'), async (c) => {
 
   const result = await paginatedQuery(
     c.env.DB,
-    `SELECT r.*, a.name AS requester_name FROM requests r JOIN agents a ON r.requester_id = a.id ${where} ORDER BY ${orderBy}`,
+    `SELECT r.* FROM requests r ${where} ORDER BY ${orderBy}`,
     `SELECT COUNT(*) as count FROM requests r ${where}`,
     params,
     pagination
@@ -193,7 +240,7 @@ requests.get('/:id', rateLimit('read'), async (c) => {
   const id = c.req.param('id');
 
   const request = await c.env.DB.prepare(
-    'SELECT r.*, a.name AS requester_name FROM requests r JOIN agents a ON r.requester_id = a.id WHERE r.id = ?'
+    'SELECT * FROM requests WHERE id = ?'
   ).bind(id).first();
 
   if (!request) {
