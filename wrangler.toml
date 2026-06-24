@@ -45,3 +45,4 @@ bucket_name = "mycelia-audit-dev"
 
 [env.dev.vars]
 ENVIRONMENT = "dev"
+ADMIN_OWNER_ID = "wally-test"
