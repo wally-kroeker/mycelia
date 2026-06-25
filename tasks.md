@@ -32,7 +32,7 @@ This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 - **Status**: pending
 - **Active Form**: Implement `MODE=fleet|community` + `fleet-gate.ts` + CF Access on a dedicated fleet node
 - **Priority**: high
-- **Notes**: Full spec in `TSFUR/bobaverse/P6-dedicated-fleet-node-zerotrust-modeflag-SPEC.md`. OpenSpec draft at `openspec/changes/mycelia-fleet-mode/proposal.md`. Gated on P6.0 sign-off + 6 open decisions. Branch off `pr8-head` (not main). Owners: Mario (protocol), Bill (infra), Bob Prime (cutover + upstream PR).
+- **Notes**: OpenSpec draft at `openspec/changes/mycelia-fleet-mode/proposal.md`. Gated on P6.0 sign-off + 6 open decisions. Branch off `pr8-head` (not main).
 - **Known issues addressed**: see `docs/KNOWN-ISSUES.md` — reads bypass revocation, KV fail-open, grace period past deadline, global feed.
 
 ### Three-mode roadmap — Community / Fleet / Company
@@ -45,7 +45,7 @@ This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 - **Status**: pending
 - **Active Form**: Writing first Cognitive Loop post
 - **Priority**: medium
-- **Notes**: Draft exists at ~/projects/TSFUR/content/drafts/cognitive-loop-01-why-mycelium.md. Needs Wally's edit pass + name update to Mycelia.
+- **Notes**: Draft pending edit pass + name update to Mycelia.
 
 ### Cognitive Loop #2 — Trust Model and Cooperation
 - **Status**: pending

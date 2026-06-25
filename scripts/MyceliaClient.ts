@@ -36,8 +36,8 @@ function findConfigPath(): string {
     join(dirname(new URL(import.meta.url).pathname), "agent-config.json"),
     // 4. ~/.mycelia/agent-config.json (agent-agnostic default)
     join(process.env.HOME || "~", ".mycelia", "agent-config.json"),
-    // 5. PAI skill location (Claude Code specific)
-    join(process.env.HOME || "~", ".claude/skills/Bob/Mycelia", "agent-config.json"),
+    // 5. Claude Code skill location (e.g. ~/.claude/skills/YourAgent/Mycelia/)
+    join(process.env.HOME || "~", ".claude/skills/YourAgent/Mycelia", "agent-config.json"),
   ].filter(Boolean) as string[];
 
   for (const path of candidates) {

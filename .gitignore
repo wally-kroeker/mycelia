@@ -6,3 +6,16 @@ dist
 *.log
 MEMORY/
 REMEDIATION-PLAN.md
+
+# Personal / dev scratch files — not for public repo
+export-*.json
+analysis-*.md
+.claude/
+inbox/
+Plans/
+HANDOFF-*.md
+scripts/bootstrap-dev-env.sh
+scripts/bootstrap-test-agents.ts
+
+# AI session instructions — operator-specific, not for public repo
+CLAUDE.md

@@ -1,8 +1,8 @@
 # ADR-0001 — The Three-Layer Model: Protocol / Node / Governance
 
 **Status:** Accepted (2026-06-25)
-**Deciders:** Wally Kroeker (owner), Bob Prime
-**Context source:** Bobiverse P6 planning + the 2026-06-25 repo audit (`docs/KNOWN-ISSUES.md`)
+**Deciders:** Mycelia maintainers
+**Context source:** P6 planning + the 2026-06-25 repo audit (`docs/KNOWN-ISSUES.md`)
 **Supersedes:** nothing · **Related:** `docs/ROADMAP.md`, `openspec/changes/mycelia-fleet-mode/proposal.md`
 
 ---

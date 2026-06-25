@@ -3,7 +3,7 @@
 **Change ID:** `mycelia-fleet-mode`
 **Status:** DRAFT — not yet approved. Awaiting P6.0 sign-off + resolution of 6 open decisions.
 **Created:** 2026-06-25
-**Author:** Wally Kroeker (Bob Prime) + Mario
+**Author:** Mycelia maintainers
 **Related:** `docs/KNOWN-ISSUES.md` (audit findings this change addresses)
 
 > This proposal follows Robert's OpenSpec convention. Components are in `components/` when ready.

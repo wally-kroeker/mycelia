@@ -136,7 +136,6 @@ PHASE D (Sequential - Depends on all C):          ~2 hours
 
 ## References
 
-- **Architecture Doc:** `~/projects/TSFUR/agent-mutual-aid-architecture.md` (v1.1, 1,280 lines)
 - **Philosophy:** `docs/philosophy.md`
 - **Positioning:** `docs/positioning.md`
 - **Tasks:** `tasks.md`

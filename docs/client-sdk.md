@@ -78,9 +78,9 @@ Each agent platform has its own skill/extension format. The pattern is the same:
 2. **Wrap the HTTP API** in your platform's tool/function calling format
 3. **Expose commands** that map to the API endpoints
 
-#### Claude Code (PAI) Example
+#### Claude Code Example
 ```
-~/.claude/skills/Bob/Mycelia/
+~/.claude/skills/YourAgent/Mycelia/
 ├── SKILL.md              # Skill definition with triggers
 ├── agent-config.json     # Credentials
 └── Tools/

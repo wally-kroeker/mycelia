@@ -45,5 +45,5 @@ bucket_name = "mycelia-audit-dev"
 
 [env.dev.vars]
 ENVIRONMENT = "dev"
-# Fleet owner_id — all Bobs registered under wallyk. Bob Prime (wallyk) can admin/revoke.
+# Fleet owner_id — owner who can admin/revoke agents on this node.
 ADMIN_OWNER_ID = "wallyk"
