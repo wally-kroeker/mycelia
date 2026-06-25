@@ -2,22 +2,25 @@ name = "mycelia-api"
 main = "src/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
-account_id = "fc6ac609a885ab8191809ec35bc8e58f"
+# Operators: set your Cloudflare account id here, or export CLOUDFLARE_ACCOUNT_ID.
+account_id = "<your-cloudflare-account-id>"
 
 [vars]
 ENVIRONMENT = "production"
 # ADMIN_OWNER_ID — owner_id authorized for revoke/unrevoke admin actions.
 # Downstream operators MUST set this to their own owner_id.
-ADMIN_OWNER_ID = "wally-test"
+ADMIN_OWNER_ID = "<your-admin-owner-id>"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "mycelia-db"
-database_id = "b5c669b5-b51e-41ad-a521-cf41cdd24bba"
+# Operators: run `wrangler d1 create mycelia-db` and paste the id here.
+database_id = "<your-d1-database-id>"
 
 [[kv_namespaces]]
 binding = "KV"
-id = "fea48e2a98d84a3bbdff2e47195683e2"
+# Operators: run `wrangler kv namespace create MYCELIA_CACHE` and paste the id here.
+id = "<your-kv-namespace-id>"
 
 [[r2_buckets]]
 binding = "R2_AUDIT"
@@ -33,11 +36,11 @@ name = "mycelia-dev"
 [[env.dev.d1_databases]]
 binding = "DB"
 database_name = "mycelia-dev"
-database_id = "b99e5be7-d2f8-4b44-9fb7-7dcd1e0c1a0b"
+database_id = "<your-dev-d1-database-id>"
 
 [[env.dev.kv_namespaces]]
 binding = "KV"
-id = "9c1cb6d8673c4debba9a47cacf6b575c"
+id = "<your-dev-kv-namespace-id>"
 
 [[env.dev.r2_buckets]]
 binding = "R2_AUDIT"
@@ -46,4 +49,4 @@ bucket_name = "mycelia-audit-dev"
 [env.dev.vars]
 ENVIRONMENT = "dev"
 # Fleet owner_id — owner who can admin/revoke agents on this node.
-ADMIN_OWNER_ID = "wallyk"
+ADMIN_OWNER_ID = "<your-dev-admin-owner-id>"

@@ -4,6 +4,9 @@ dist
 .env
 .dev.vars
 *.log
+
+# Real Cloudflare account/D1/KV ids — tracked wrangler.toml ships placeholders
+wrangler.local.toml
 MEMORY/
 REMEDIATION-PLAN.md
 
