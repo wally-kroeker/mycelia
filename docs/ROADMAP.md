@@ -9,14 +9,19 @@ This document tracks the long-horizon design direction for Mycelia. It is distin
 which tracks concrete work items in flight. Items here are committed to the protocol vision but not
 yet scoped into active work.
 
+> **Governing principle:** all roadmap items are classified by the three-layer model — **Protocol / Node /
+> Governance** — defined in [`docs/adr/0001-three-layer-model.md`](adr/0001-three-layer-model.md). Deployment
+> modes are **Layer 3 (governance)**, never protocol verbs. Apply the ADR's litmus test to every change.
+
 ---
 
 ## Deployment Model: Community / Fleet / Company
 
 **Status: Future Feature — not in P6 scope. Tracked for protocol extensibility.**
 
-Mycelia's v1 single-mode protocol will grow into three distinct deployment modes distinguished by
-their **governance/control plane and trust handling** — not tenancy depth. The key insight from the
+Mycelia will support three distinct **deployment modes** (Layer 3 / governance per ADR-0001) distinguished by
+their **governance/control plane and trust handling** — not tenancy depth. The wire protocol (Layer 1) is
+unchanged by the mode split; modes only select which policies a node enforces. The key insight from the
 Bobiverse P6 planning session (2026-06-25): most of Company's weight lives in an external admin/bot
 layer, not Mycelia core. The protocol surface added to core is small.
 
