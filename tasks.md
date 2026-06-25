@@ -28,6 +28,19 @@ This file tracks tasks for Mycelia in a format compatible with PAI's Task tools.
 
 ## Pending
 
+### P6 — Fleet Mode + Zero Trust node
+- **Status**: pending
+- **Active Form**: Implement `MODE=fleet|community` + `fleet-gate.ts` + CF Access on a dedicated fleet node
+- **Priority**: high
+- **Notes**: Full spec in `TSFUR/bobaverse/P6-dedicated-fleet-node-zerotrust-modeflag-SPEC.md`. OpenSpec draft at `openspec/changes/mycelia-fleet-mode/proposal.md`. Gated on P6.0 sign-off + 6 open decisions. Branch off `pr8-head` (not main). Owners: Mario (protocol), Bill (infra), Bob Prime (cutover + upstream PR).
+- **Known issues addressed**: see `docs/KNOWN-ISSUES.md` — reads bypass revocation, KV fail-open, grace period past deadline, global feed.
+
+### Three-mode roadmap — Community / Fleet / Company
+- **Status**: pending (design only)
+- **Active Form**: Tracking the long-horizon deployment model split
+- **Priority**: low
+- **Notes**: Documented in `docs/ROADMAP.md`. Community = current; Fleet = P6; Company = future phase when there is a concrete customer. Company follows the Community bot-gated pattern + a managed trust API surface — most weight lives in an external admin/bot layer, not Mycelia core. Aligns with "community-as-package" + "node federation" already in this file. Discuss with Robert before designing.
+
 ### Cognitive Loop #1 — "Why I'm Building Mutual Aid for AI Agents"
 - **Status**: pending
 - **Active Form**: Writing first Cognitive Loop post
