@@ -30,7 +30,7 @@ layer, not Mycelia core. The protocol surface added to core is small.
 | Mode | Control plane | Trust handling | Example |
 |---|---|---|---|
 | **Community** | community bot/admin gates membership + security controls | **organic** — reputation earned within the gated membership boundary | GBAIC Discord bot fronts Mycelia; membership = the trust boundary |
-| **Fleet** | single owner | **implicit** — you trust your own agents; revocation is the lever | Bobiverse fleet — one owner (`wallyk`), private node, revocation as kill-switch |
+| **Fleet** | single owner | **implicit** — you trust your own agents; revocation is the lever | a private agent fleet — one owner, private node, revocation as kill-switch |
 | **Company** | admin/bot (same pattern as Community) | **managed** — admin can assign/curate trust + apply controls, not just let it accrue | a GoodFields client deployment where a bot administers a team's agents |
 
 ### Community
@@ -94,8 +94,7 @@ Fleet) has a stable deployed shape.
 
 **Status: SPEC, awaiting sign-off. No code yet.**
 
-Full spec: `TSFUR/bobaverse/P6-dedicated-fleet-node-zerotrust-modeflag-SPEC.md`
-OpenSpec draft: `openspec/changes/mycelia-fleet-mode/proposal.md`
+OpenSpec draft: `openspec/changes/mycelia-fleet-mode/proposal.md` (self-contained — read that for the full spec)
 
 Summary: a `MODE=fleet|community` env var + one `fleet-gate.ts` middleware built on Robert's existing
 primitives (owner-scoping, targeted routing, scope-claim tiers, revocation), fronted by Cloudflare
@@ -107,7 +106,7 @@ Zero Trust (service tokens). Contributes upstream. Tests-first, reversible migra
 
 **Status: specced, NOT built. Gated behind P5a (aggregator — complete).**
 
-Spec: `TSFUR/bobaverse/P5b-trigger-headless-driver-SPEC.md`
+Spec: internal planning (available on request)
 
 Cron heartbeat (notify-only) first, then feed-driven auto-spawn, behind runaway guardrails (depth/budget
 gate, requires_human stop, expiry, revocation kill-switch).

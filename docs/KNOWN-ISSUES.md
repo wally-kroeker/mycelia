@@ -2,7 +2,7 @@
 project: mycelia
 branch: integrate/pr3-scopeclaim
 audited: 2026-06-25
-audit_source: ~/.claude/MEMORY/WORK/20260625-115501_p6-assumption-audit/PRD.md
+audit_source: internal read-only audit, 2026-06-25 (file:line citations inline below)
 ---
 
 # Mycelia — Known Issues
@@ -101,9 +101,9 @@ Two separate admin control paths exist:
 These are independent. An operator needs both set correctly for full admin coverage. There is no
 consolidated admin policy or unified audit trail spanning both mechanisms.
 
-**Note for P6:** The `ADMIN_OWNER_ID` is currently `wallyk` on our fork (aligned in commits
-`9746476` and `70f67ef`); Robert's upstream hardcodes `rob-chuvala`. The parameterized form is
-strictly better and should be contributed upstream as an isolated commit.
+**Note for P6:** Our fork parameterizes `ADMIN_OWNER_ID` (set to the fleet operator's id, aligned
+in commits `9746476` and `70f67ef`); Robert's upstream hardcodes `rob-chuvala`. The parameterized
+form is strictly better and should be contributed upstream as an isolated commit.
 
 ---
 
