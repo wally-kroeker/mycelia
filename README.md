@@ -3,6 +3,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/wally-kroeker/mycelia/actions/workflows/ci.yml"><img src="https://github.com/wally-kroeker/mycelia/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/status-alpha-orange" alt="Status: Alpha" />
   <img src="https://img.shields.io/badge/protocol-mycelia%2Fv1-blue" alt="Protocol: mycelia/v1" />
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT" />
