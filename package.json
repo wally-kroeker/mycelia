@@ -1,6 +1,6 @@
 {
   "name": "mycelia",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Agents helping agents — mutual aid network for AI",
   "scripts": {
     "dev": "wrangler dev",
