@@ -100,8 +100,12 @@ export const authMiddleware = createMiddleware<{ Bindings: Env; Variables: { aut
 /**
  * Middleware that requires agent key type (not observer).
  * Also enforces B8 kill-switch: revoked agents fail every action.
+ *
+ * KV fail behavior is mode-aware (see fleet-gate.ts):
+ *  - fleet/company: KV error → 503 (fail-closed; revocation bypass is unacceptable).
+ *  - community: KV error → pass (fail-open; KV outage does not take down the network).
  */
-export const requireAgentKey = createMiddleware<{ Bindings: { KV: KVNamespace }; Variables: { auth: AuthContext } }>(
+export const requireAgentKey = createMiddleware<{ Bindings: Env; Variables: { auth: AuthContext } }>(
   async (c, next) => {
     const auth = c.get('auth');
     if (auth.key_type === 'observer') {
@@ -114,24 +118,34 @@ export const requireAgentKey = createMiddleware<{ Bindings: { KV: KVNamespace };
 
     // B8 kill-switch (2026-05-18): revoked agents cannot act, period.
     // Self-revoke + admin-revoke handled in /routes/agents.ts.
+    // Failure mode is now mode-aware via fleet-gate: fleet/company fail-closed, community fail-open.
     try {
-      const { checkRevoked } = await import('../lib/revocation');
-      const rev = await checkRevoked(c.env.KV, auth.agent_id);
-      if (rev) {
+      const { checkRevocationWithMode } = await import('./fleet-gate');
+      const mode = (c.env.MODE ?? 'community') as import('./fleet-gate').NodeMode;
+      const result = await checkRevocationWithMode(c.env.KV, auth.agent_id, mode);
+      if ('revoked' in result && result.revoked === true) {
+        const entry = (result as { revoked: true; entry: import('../lib/revocation').RevocationEntry }).entry;
         return c.json({
           ok: false,
           error: {
             code: 'AGENT_REVOKED',
-            message: `Agent ${auth.agent_id} is revoked (${rev.reason}).${rev.revoke_until ? ` Auto-lift at ${rev.revoke_until}.` : ' Until admin lifts.'}`,
+            message: `Agent ${auth.agent_id} is revoked (${entry.reason}).${entry.revoke_until ? ` Auto-lift at ${entry.revoke_until}.` : ' Until admin lifts.'}`,
           },
           meta: { request_id: crypto.randomUUID(), timestamp: new Date().toISOString() }
         }, 403);
       }
+      // kvError with revoked: false = community fail-open — fall through silently.
     } catch {
-      // NOTE: Fail-open on KV error — revocation check does not gate access when KV is down.
-      // This is intentional: a KV outage shouldn't take down the whole network.
-      // Audit log captures drift; ops should alert on repeated KV errors.
-      // Tech debt: consider adding a console.error here to surface KV failures in logs.
+      // fleet/company: checkRevocationWithMode re-throws on KV error (fail-closed).
+      // Return 503 so the request is rejected rather than silently bypassing revocation.
+      return c.json({
+        ok: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Revocation service unavailable. Request rejected to prevent revocation bypass.',
+        },
+        meta: { request_id: crypto.randomUUID(), timestamp: new Date().toISOString() }
+      }, 503);
     }
 
     await next();

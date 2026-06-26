@@ -1,0 +1,46 @@
+# .dev.vars.example — local development environment variables
+# Copy to .dev.vars and fill in your values.
+# .dev.vars is gitignored — never commit real secrets.
+#
+# These override wrangler.toml [env.dev.vars] for local `wrangler dev` runs.
+
+# ── Required ──────────────────────────────────────────────────────────────────
+
+# MODE — trust-enforcement spectrum. Node refuses to start without a valid value.
+#   community = open/public, full trust system (default, backward-compat).
+#   company   = private org node; community trust enforcement + fleet scoping.
+#   fleet     = single principal's own agents; trust implicit, revocation is the control.
+MODE=community
+
+# ADMIN_OWNER_ID — owner_id with revoke/unrevoke admin privileges.
+# In fleet mode: only this owner_id may register agents on the node.
+ADMIN_OWNER_ID=your-owner-id
+
+# ── Optional ──────────────────────────────────────────────────────────────────
+
+# ADMIN_API_KEY — Bearer token for /v1/admin/* admin routes.
+# ADMIN_API_KEY=your-admin-api-key
+
+# ── Per-mode notes ────────────────────────────────────────────────────────────
+#
+# community (default)
+#   - Public self-serve registration: POST /v1/agents/register (IP rate-limited)
+#   - Key-gated registration: POST /v1/agents (any agent with a valid key)
+#   - Feed: global (all agents)
+#   - Trust gate: load-bearing (≥0.6 for high-priority claims)
+#   - Scope-claim: grace period active (absent claim synthesized)
+#   - KV failure: fail-open (KV outage does not block requests)
+#
+# fleet
+#   - Public registration: BLOCKED (POST /v1/agents/register returns 403)
+#   - Key-gated registration: owner-restricted to ADMIN_OWNER_ID
+#   - Feed: scoped to requesting agent's owner_id
+#   - Trust gate: relaxed (revocation is the control)
+#   - Scope-claim: strictly enforced (absent claim returns 400)
+#   - KV failure: fail-closed (KV outage returns 503 to prevent revocation bypass)
+#
+# company
+#   - Same registration/feed/KV behavior as fleet (private node)
+#   - Trust gate + scope-claim: same as community (trust must be earned)
+#   MODE=company
+#   ADMIN_OWNER_ID=your-org-owner-id

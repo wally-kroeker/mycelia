@@ -45,7 +45,9 @@ function authReq(path: string, key: string, body?: object, method = 'POST'): Req
   });
 }
 
-const ENV_EXTRAS = { ENVIRONMENT: 'test' };
+// MODE must be set — node refuses to start without a valid value (fail-closed).
+// Integration tests use 'community' to preserve existing behavior (backward-compat default).
+const ENV_EXTRAS = { ENVIRONMENT: 'test', MODE: 'community' as const };
 
 describe('B1 — tier-refused response leaves no zombie claim', () => {
   it('claim → tier-escalated response → 403 ASK_EXCEEDS_TIER → claim STILL active', async () => {

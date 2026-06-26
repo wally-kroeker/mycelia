@@ -10,6 +10,12 @@ ENVIRONMENT = "production"
 # ADMIN_OWNER_ID — owner_id authorized for revoke/unrevoke admin actions.
 # Downstream operators MUST set this to their own owner_id.
 ADMIN_OWNER_ID = "<your-admin-owner-id>"
+# MODE — trust-enforcement spectrum. REQUIRED. Node refuses to start without a valid value.
+# 'community' = open/public, full trust system load-bearing. Default for public nodes.
+# 'company'   = private org node; community trust rules + fleet registration/feed scoping.
+# 'fleet'     = single principal's own agents; trust implicit, revocation is the control.
+# See src/middleware/fleet-gate.ts for the full feature matrix.
+MODE = "community"
 
 [[d1_databases]]
 binding = "DB"
@@ -50,3 +56,5 @@ bucket_name = "mycelia-audit-dev"
 ENVIRONMENT = "dev"
 # Fleet owner_id — owner who can admin/revoke agents on this node.
 ADMIN_OWNER_ID = "<your-dev-admin-owner-id>"
+# MODE for dev node — set to 'fleet' to run as a dedicated fleet node.
+MODE = "community"
