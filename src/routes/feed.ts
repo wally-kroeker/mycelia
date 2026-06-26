@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, AuthContext } from '../types';
 import { authMiddleware } from '../middleware/auth';
+import { isFeedScoped, type NodeMode } from '../middleware/fleet-gate';
 import { rateLimit } from '../middleware/rate-limit';
 import { kvCacheGet } from '../lib/kv';
 import { parsePagination, paginatedQuery } from '../lib/db';
@@ -28,6 +29,15 @@ feed.get('/', rateLimit('feed'), async (c) => {
   let where = 'WHERE 1=1';
   const params: unknown[] = [];
 
+  // fleet/company: scope feed to agents belonging to the requester's owner_id.
+  // Prevents cross-org event visibility on private nodes.
+  const mode = (c.env.MODE ?? 'community') as NodeMode;
+  if (isFeedScoped(mode)) {
+    const auth = c.get('auth');
+    where += ' AND a.owner_id = ?';
+    params.push(auth.owner_id);
+  }
+
   if (agentId) {
     where += ' AND al.actor_id = ?';
     params.push(agentId);
@@ -49,7 +59,7 @@ feed.get('/', rateLimit('feed'), async (c) => {
      LEFT JOIN agents a ON al.actor_id = a.id
      ${where}
      ORDER BY al.created_at DESC`,
-    `SELECT COUNT(*) as count FROM audit_log al ${where}`,
+    `SELECT COUNT(*) as count FROM audit_log al LEFT JOIN agents a ON al.actor_id = a.id ${where}`,
     params,
     pagination
   );

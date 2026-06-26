@@ -9,6 +9,11 @@ export interface Env {
   ENVIRONMENT: string;
   ADMIN_API_KEY?: string;
   ADMIN_OWNER_ID?: string; // owner_id authorized for admin revoke/unrevoke (wally-test in dev)
+  // MODE — trust-enforcement spectrum. Required; node refuses to start without a valid value.
+  // 'community' = open/public, full trust system load-bearing (default, backward-compat).
+  // 'company'   = private org node; community trust enforcement + fleet tenancy/feed scoping.
+  // 'fleet'     = single principal's own agents; trust implicit, enforcement relaxed.
+  MODE?: 'fleet' | 'company' | 'community';
 }
 
 // ═══ Database Entities ═══

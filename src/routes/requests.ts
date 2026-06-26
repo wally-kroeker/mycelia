@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, AuthContext, CreateRequestInput, RequestType, Priority } from '../types';
 import { authMiddleware, requireAgentKey } from '../middleware/auth';
+import { isScopeClaimEnforced, type NodeMode } from '../middleware/fleet-gate';
 import { writeAuditLog } from '../lib/audit';
 import { parsePagination, paginatedQuery } from '../lib/db';
 import { success, error, generateId, now } from '../lib/utils';
@@ -76,7 +77,10 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
     capabilityIds.push(cap.id);
   }
 
-  // v1.1 — validate scope_claim (required after grace period; tolerated absent during rollout)
+  // v1.1 — validate scope_claim.
+  // fleet/company: strictly required (grace period closed; every request must carry an identity envelope).
+  // community: grace period still active — absent claim synthesized as public-tier with a warning.
+  const mode = (c.env.MODE ?? 'community') as NodeMode;
   let scopeClaimJson: string | null = null;
   if (input.scope_claim !== undefined && input.scope_claim !== null) {
     const v = validateScopeClaim(input.scope_claim, auth.agent_id);
@@ -84,9 +88,14 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
       return c.json(error(v.code, v.message, 400).body, 400);
     }
     scopeClaimJson = JSON.stringify(v.claim);
+  } else if (isScopeClaimEnforced(mode)) {
+    // fleet/company: grace period is closed — hard reject absent scope_claim.
+    return c.json(
+      error('SCOPE_CLAIM_REQUIRED', `scope_claim is required on this node (MODE=${mode}). Include a valid scope envelope with your request.`, 400).body,
+      400
+    );
   } else {
-    // Grace period: synthesize a public-tier claim for legacy clients, log a warning.
-    // After 2-week grace period (target 2026-06-01), promote to hard SCOPE_CLAIM_REQUIRED.
+    // community: grace period — synthesize a public-tier claim for legacy clients, log a warning.
     scopeClaimJson = JSON.stringify({
       requester: 'legacy-client',
       agent_id: auth.agent_id,

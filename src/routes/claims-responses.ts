@@ -1,9 +1,13 @@
 // src/routes/claims-responses.ts
 // Mounted at /v1/requests — paths are relative to that mount point.
 
+// src/routes/claims-responses.ts
+// Mounted at /v1/requests — paths are relative to that mount point.
+
 import { Hono } from 'hono';
 import type { Env, AuthContext, CreateClaimInput, CreateResponseInput, HelpRequest, Claim } from '../types';
 import { authMiddleware, requireAgentKey } from '../middleware/auth';
+import { isTrustGateRelaxed, type NodeMode } from '../middleware/fleet-gate';
 import { rateLimit } from '../middleware/rate-limit';
 import { writeAuditLog } from '../lib/audit';
 import { success, error, generateId, now } from '../lib/utils';
@@ -76,8 +80,11 @@ claimsResponses.post('/:id/claims', rateLimit('claim.create'), async (c) => {
     );
   }
 
-  // Constraint 5: High-priority requires trust_score >= 0.6
-  if (request.priority === 'high') {
+  // Constraint 5: High-priority requires trust_score >= 0.6.
+  // In fleet mode the trust gate is relaxed — all agents are the owner's own, trust is implicit.
+  // company + community: gate remains load-bearing.
+  const mode = (c.env.MODE ?? 'community') as NodeMode;
+  if (request.priority === 'high' && !isTrustGateRelaxed(mode)) {
     const agent = await c.env.DB.prepare(
       'SELECT trust_score FROM agents WHERE id = ?'
     ).bind(auth.agent_id).first<{ trust_score: number }>();

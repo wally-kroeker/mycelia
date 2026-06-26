@@ -1,11 +1,16 @@
 import { Hono } from 'hono';
 import type { Env, CreateAgentInput } from '../types';
 import { generateApiKey } from '../middleware/auth';
+import { registrationGate } from '../middleware/fleet-gate';
 import { writeAuditLog } from '../lib/audit';
 import { kvInvalidateCapabilityCache } from '../lib/kv';
 import { success, error, generateId, now } from '../lib/utils';
 
 const register = new Hono<{ Bindings: Env }>();
+
+// fleet/company: block public self-serve registration (registrationGate → 403).
+// community: no-op, passes through.
+register.use('*', registrationGate);
 
 /**
  * IP-based rate limiting for public registration.
