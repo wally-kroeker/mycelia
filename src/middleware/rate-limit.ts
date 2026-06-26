@@ -24,14 +24,32 @@ export function rateLimit(category: string) {
   return createMiddleware<{ Bindings: Env; Variables: { auth: AuthContext } }>(
     async (c, next) => {
       const auth = c.get('auth');
-      const key = `ratelimit:${auth.agent_id}:${category}`;
-      const windowKey = Math.floor(Date.now() / (config.windowSeconds * 1000));
-      const kvKey = `${key}:${windowKey}`;
+      const key = `${auth.agent_id}:${category}`;
+      const windowStart = Math.floor(Date.now() / (config.windowSeconds * 1000));
 
-      const current = parseInt(await c.env.KV.get(kvKey) || '0', 10);
+      // Atomic upsert: increment within the current window; reset on window
+      // rollover. D1 serializes writes, so no lost-update race is possible.
+      // The CASE expression resets count to 1 when the stored window_start
+      // differs from the incoming window — same semantics as KV TTL expiry.
+      //
+      // Table size is bounded: one row per (agent_id, category) pair; the
+      // window_start column is updated in-place rather than inserting a new
+      // row per window. No cleanup job is needed.
+      const row = await c.env.DB.prepare(
+        `INSERT INTO rate_limits (key, count, window_start)
+         VALUES (?, 1, ?)
+         ON CONFLICT(key) DO UPDATE SET
+           count = CASE WHEN rate_limits.window_start = excluded.window_start
+                        THEN rate_limits.count + 1
+                        ELSE 1 END,
+           window_start = excluded.window_start
+         RETURNING count`
+      ).bind(key, windowStart).first<{ count: number }>();
 
-      if (current >= config.limit) {
-        const resetTime = (windowKey + 1) * config.windowSeconds;
+      const current = row?.count ?? 1;
+
+      if (current > config.limit) {
+        const resetTime = (windowStart + 1) * config.windowSeconds;
         c.header('X-RateLimit-Limit', String(config.limit));
         c.header('X-RateLimit-Remaining', '0');
         c.header('X-RateLimit-Reset', String(resetTime));
@@ -43,13 +61,8 @@ export function rateLimit(category: string) {
         }, 429);
       }
 
-      // Increment counter
-      await c.env.KV.put(kvKey, String(current + 1), {
-        expirationTtl: config.windowSeconds
-      });
-
       c.header('X-RateLimit-Limit', String(config.limit));
-      c.header('X-RateLimit-Remaining', String(config.limit - current - 1));
+      c.header('X-RateLimit-Remaining', String(config.limit - current));
 
       await next();
     }
