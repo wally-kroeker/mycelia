@@ -1,0 +1,70 @@
+# Mycelia CI — protocol correctness, type safety, and deployability gates.
+#
+# Mycelia is a cooperation protocol other people's agents connect to, so the
+# bar is "does the wire contract still behave." These three jobs map to the
+# project's stated goals:
+#   - test         → protocol correctness: Wilson-score trust, request state
+#                    machine, prompt-injection sanitization, scope-claim /
+#                    revocation, integration round-trips (235 vitest tests)
+#   - typecheck    → TypeScript strict mode is a project convention; tsc is the
+#                    only thing that enforces it
+#   - worker-build → the reference node ships to Cloudflare Workers; a dry-run
+#                    bundle proves the code still compiles to a deployable Worker
+#
+# Runner: Bun (the project's package manager — bun.lock is committed). The test
+# command itself is vitest (see package.json), which runs under Node; Bun only
+# installs deps and drives the scripts.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A newer push to the same branch/PR supersedes in-flight runs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.6
+      # trustedDependencies in package.json lets Bun run better-sqlite3's
+      # native postinstall — the integration tests' D1 adapter needs it.
+      - run: bun install --frozen-lockfile
+      - run: bun run test
+
+  typecheck:
+    name: Typecheck (tsc strict)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.6
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+
+  worker-build:
+    name: Worker build (wrangler dry-run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.6
+      - run: bun install --frozen-lockfile
+      # Bundles the Worker locally; never contacts Cloudflare, so the scrubbed
+      # placeholder ids in wrangler.toml are fine here.
+      - run: bunx wrangler deploy --dry-run --outdir dist
