@@ -39,7 +39,7 @@ A corollary test for L1 additions: *does this change the messages two agents exc
 
 ### Gray-area rulings (decided, to prevent drift)
 
-- **Scope-claim:** the *envelope field* on a request is **L1**; *what each tier (`public|cohort|intimate|sacred`)
+- **Scope-claim:** the *envelope field* on a request is **L1**; *what each tier (`public|cohort|personal|sealed`)
   permits* is **L3** policy.
 - **Trust:** the trust **value + its semantics** (a 0–1 number meaning X) is **L1**; the **computation** (Wilson
   score) is **L2**; **management/curation controls** (an admin/bot assigning or overriding trust) are **L3**.

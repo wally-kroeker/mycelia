@@ -109,7 +109,7 @@ export interface SeededRequest {
 export async function seedDirectedRequest(
   env: TestEnv,
   agents: SeededAgents,
-  options: { askMaxTier?: 'public' | 'cohort' | 'intimate'; status?: string } = {}
+  options: { askMaxTier?: 'public' | 'cohort' | 'personal'; status?: string } = {}
 ): Promise<SeededRequest> {
   const requestId = 'req-' + crypto.randomUUID();
   const ts = new Date().toISOString();

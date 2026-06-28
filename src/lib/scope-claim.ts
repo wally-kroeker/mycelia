@@ -6,21 +6,21 @@
 /**
  * Tier hierarchy (top is most restrictive).
  *
- * sacred   — Rob + per-item consent only. NEVER over mycelia.
- * intimate — Rob + named fleet. AEBS work-internal. Private in-flight decisions.
+ * sealed   — Rob + per-item consent only. NEVER over mycelia.
+ * personal — Rob + named fleet. AEBS work-internal. Private in-flight decisions.
  * cohort   — fleet-internal doctrine, technical specs, project memories.
  * public   — NWS essays, doctrine docs, pack source, anything published.
  */
-export type Tier = 'public' | 'cohort' | 'intimate' | 'sacred';
+export type Tier = 'public' | 'cohort' | 'personal' | 'sealed';
 
 const TIER_RANK: Record<Tier, number> = {
   public: 0,
   cohort: 1,
-  intimate: 2,
-  sacred: 3,
+  personal: 2,
+  sealed: 3,
 };
 
-const TIER_VALUES: readonly Tier[] = ['public', 'cohort', 'intimate', 'sacred'] as const;
+const TIER_VALUES: readonly Tier[] = ['public', 'cohort', 'personal', 'sealed'] as const;
 
 /**
  * The structured envelope every v1.1 mycelia request must carry.
@@ -178,11 +178,11 @@ export function compareTiers(a: Tier, b: Tier): number {
 }
 
 /**
- * Sacred-tier content NEVER traverses mycelia (handler discipline rule).
+ * Sealed-tier content NEVER traverses mycelia (handler discipline rule).
  * Helper to make the check explicit at call sites.
  */
 export function refusalRequiredForMycelia(contentTier: Tier): boolean {
-  return contentTier === 'sacred';
+  return contentTier === 'sealed';
 }
 
 /**

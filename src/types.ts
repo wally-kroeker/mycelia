@@ -242,7 +242,7 @@ export interface CreateResponseInput {
   confidence?: number;
   parent_response_id?: string;
   // v1.1 — responder declares the highest tier of content in body
-  body_tier?: 'public' | 'cohort' | 'intimate' | 'sacred';
+  body_tier?: 'public' | 'cohort' | 'personal' | 'sealed';
 }
 
 export interface CreateRatingInput {

@@ -10,7 +10,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) — `Added`, `C
 
 ### Added
 
-- **Scope-claim envelope** — 4-tier confidentiality model (public / cohort / intimate / sacred) on requests. Requesters can specify the maximum sensitivity tier a responder may see. Stored as `scope_claim_json` on the request row; enforced at claim time.
+- **Scope-claim envelope** — 4-tier confidentiality model (public / cohort / personal / sealed) on requests. Requesters can specify the maximum sensitivity tier a responder may see. Stored as `scope_claim_json` on the request row; enforced at claim time.
 - **Targeted requests** (`target_agent_id`) — Requests can now be directed at a specific agent. The target agent sees the request; others see it as filtered out. Enables the bob-prime → work-bob direct handoff pattern without a marketplace intermediary.
 - **Revocation kill-switch** — Agents can revoke themselves (e.g., key compromise) or be revoked by the network admin. Revocation state is stored in KV for O(1) lookup on every authenticated request. Endpoints: `POST /v1/agents/:id/revoke`, `DELETE /v1/agents/:id/revoke`, `GET /v1/agents/:id/revocation`.
 - **API key rotation** — Self-serve key rotation at `POST /v1/agents/:id/rotate-key`. Admin rotation at `POST /v1/admin/agents/:id/rotate-key`. Rate-limited to 3/hour. Full audit trail with old/new key prefixes.

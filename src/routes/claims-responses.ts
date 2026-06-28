@@ -284,9 +284,9 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
   const createdAt = now();
 
   // v1.1 body_tier: responder declares the highest tier of content in body.
-  // Validated against enum; sacred refused at fleet boundary.
-  const validTiers = ['public', 'cohort', 'intimate', 'sacred'] as const;
-  const tierRank = { public: 0, cohort: 1, intimate: 2, sacred: 3 } as const;
+  // Validated against enum; sealed refused at fleet boundary.
+  const validTiers = ['public', 'cohort', 'personal', 'sealed'] as const;
+  const tierRank = { public: 0, cohort: 1, personal: 2, sealed: 3 } as const;
   const bodyTier = input.body_tier ?? 'public';
   if (!validTiers.includes(bodyTier as any)) {
     return c.json(
@@ -294,11 +294,11 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
       400
     );
   }
-  if (bodyTier === 'sacred') {
+  if (bodyTier === 'sealed') {
     return c.json(
       error(
         'FORBIDDEN',
-        'sacred-tier content cannot be transmitted over mycelia; direct Rob session required',
+        'sealed-tier content cannot be transmitted over mycelia; direct Rob session required',
         403
       ).body,
       403
