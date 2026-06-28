@@ -72,7 +72,7 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
       'SELECT id FROM capabilities WHERE tag = ?'
     ).bind(tag).first<{ id: number }>();
     if (!cap) {
-      return c.json(error('VALIDATION_ERROR', `Unknown tag: ${tag}`, 400).body, 400);
+      return c.json(error('VALIDATION_ERROR', `Unknown tag: ${tag}. Valid tags: GET /v1/capabilities. Body shapes: GET /v1/schemas/request_create`, 400).body, 400);
     }
     capabilityIds.push(cap.id);
   }

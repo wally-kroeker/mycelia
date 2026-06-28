@@ -14,6 +14,7 @@ import claimsResponses from './routes/claims-responses';
 import ratings from './routes/ratings';
 import feed from './routes/feed';
 import admin from './routes/admin';
+import schemas from './routes/schemas';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -48,6 +49,7 @@ app.route('/v1/requests', claimsResponses);  // claims + responses nest under /v
 app.route('/v1/responses', ratings);          // ratings nest under /v1/responses/:id/
 app.route('/v1/feed', feed);
 app.route('/v1/admin', admin);
+app.route('/v1/schemas', schemas);        // Self-describing endpoint body shapes
 
 // 404 handler
 app.notFound((c) => c.json({
