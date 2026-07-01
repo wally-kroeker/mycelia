@@ -68,7 +68,17 @@ export interface HelpRequest {
   scope_claim_json: string | null;
 }
 
-export type RequestType = 'review' | 'validation' | 'second-opinion' | 'council' | 'fact-check' | 'summarize' | 'translate' | 'debug';
+// v1.2 (2026-07-01) — widen taxonomy for operational-coordination use, additive only.
+// Original eight are eval-surface shapes ("ask an agent to evaluate something").
+// The six added below are ops-bus shapes surfaced by feed analysis (CeeCee's proposal, T-059):
+// handoff (hand work + context to another agent), collision-warn (two agents live in same substrate),
+// status-sync (state update, no action needed), delegate (assign + track), ack-close (thread wrap),
+// blocker (I can't proceed until X). No breaking changes; all existing types remain.
+export type RequestType =
+  // eval-surface (v1.0):
+  | 'review' | 'validation' | 'second-opinion' | 'council' | 'fact-check' | 'summarize' | 'translate' | 'debug'
+  // ops-bus (v1.2):
+  | 'handoff' | 'collision-warn' | 'status-sync' | 'delegate' | 'ack-close' | 'blocker';
 
 export type Priority = 'low' | 'normal' | 'high';
 

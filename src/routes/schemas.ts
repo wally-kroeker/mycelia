@@ -56,7 +56,10 @@ const CATALOG: Record<string, EndpointSchema> = {
       request_type: {
         type: 'string',
         required: true,
-        enum: ['review', 'validation', 'second-opinion', 'council', 'fact-check', 'summarize', 'translate', 'debug'],
+        enum: [
+          'review', 'validation', 'second-opinion', 'council', 'fact-check', 'summarize', 'translate', 'debug',
+          'handoff', 'collision-warn', 'status-sync', 'delegate', 'ack-close', 'blocker',
+        ],
       },
       priority: {
         type: 'string',

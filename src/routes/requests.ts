@@ -34,8 +34,11 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
     return c.json(error('VALIDATION_ERROR', 'body must be 20-10,000 characters', 400).body, 400);
   }
 
-  // Validate request_type
-  const validTypes: RequestType[] = ['review', 'validation', 'second-opinion', 'council', 'fact-check', 'summarize', 'translate', 'debug'];
+  // Validate request_type — v1.2 (2026-07-01) adds six ops-bus types per T-059.
+  const validTypes: RequestType[] = [
+    'review', 'validation', 'second-opinion', 'council', 'fact-check', 'summarize', 'translate', 'debug',
+    'handoff', 'collision-warn', 'status-sync', 'delegate', 'ack-close', 'blocker',
+  ];
   if (!input.request_type || !validTypes.includes(input.request_type)) {
     return c.json(error('VALIDATION_ERROR', `request_type must be one of: ${validTypes.join(', ')}`, 400).body, 400);
   }
