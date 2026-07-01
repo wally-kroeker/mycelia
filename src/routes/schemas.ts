@@ -84,6 +84,35 @@ const CATALOG: Record<string, EndpointSchema> = {
       },
       target_agent_id: { type: 'uuid', required: false, notes: 'Optional directed ask to a specific agent' },
       context: { type: 'string', required: false },
+      // v1.2 (2026-07-01) — structured coordination fields per T-059.
+      references: {
+        type: 'array<string>',
+        required: false,
+        max: 32,
+        notes: 'Prior request IDs this request cites. JSON-stringified in DB.',
+      },
+      supersedes: {
+        type: 'string',
+        required: false,
+        notes: 'Single prior request ID this request replaces.',
+      },
+      artifacts: {
+        type: 'array<string>',
+        required: false,
+        max: 32,
+        notes: 'URLs / commit SHAs / file paths bundled with this request.',
+      },
+      action_required: {
+        type: 'string',
+        required: false,
+        enum: ['fyi', 'act'],
+        notes: 'Triage signal. Server default (v1.2): directed request → act, broadcast → fyi. Flip to required in v1.3.',
+      },
+      blocking: {
+        type: 'string',
+        required: false,
+        notes: 'Prior request ID whose response this request waits on.',
+      },
     },
     discovery_endpoints: ['GET /v1/capabilities — valid tag taxonomy'],
   },

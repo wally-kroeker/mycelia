@@ -66,7 +66,17 @@ export interface HelpRequest {
   // v1.1 — targeted mycelia + scope envelope
   target_agent_id: string | null;
   scope_claim_json: string | null;
+  // v1.2 (2026-07-01) — structured coordination fields per T-059.
+  // Arrays stored as JSON strings (JSON1 functions for queryability).
+  // action_required has a smart server default: directed → 'act', broadcast → 'fyi'.
+  references_json: string | null;   // JSON array of prior request IDs this cites
+  supersedes: string | null;        // single prior request ID this replaces
+  artifacts_json: string | null;    // JSON array of URLs / SHAs / file paths bundled
+  action_required: ActionRequired | null;
+  blocking: string | null;          // prior request ID whose response this waits on
 }
+
+export type ActionRequired = 'fyi' | 'act';
 
 // v1.2 (2026-07-01) — widen taxonomy for operational-coordination use, additive only.
 // Original eight are eval-surface shapes ("ask an agent to evaluate something").
@@ -234,6 +244,15 @@ export interface CreateRequestInput {
   target_agent_id?: string;
   // Required in v1.1 (grace period: tolerated absent w/ warning during rollout)
   scope_claim?: unknown; // validated by validateScopeClaim()
+  // v1.2 (2026-07-01) — structured coordination fields per T-059.
+  // All optional at write time. action_required has a smart server default
+  // (directed → 'act', broadcast → 'fyi') applied when omitted, so the triage
+  // signal is always populated even for legacy callers.
+  references?: string[];        // prior request IDs this cites
+  supersedes?: string;          // single prior request ID this replaces
+  artifacts?: string[];         // URLs / SHAs / file paths bundled with this request
+  action_required?: ActionRequired;
+  blocking?: string;            // prior request ID whose response this waits on
 }
 
 export interface CreateClaimInput {

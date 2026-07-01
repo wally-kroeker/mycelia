@@ -12,6 +12,30 @@ const requests = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>()
 
 requests.use('*', authMiddleware);
 
+/**
+ * v1.2 helper: validate an optional string-array input field. Returns either
+ * a JSON-stringified value (for DB storage) or an error message. NULL when input
+ * absent — matches DB column nullability.
+ */
+function validateStringArray(
+  input: unknown,
+  fieldName: string,
+): { value: string | null; error: string | null } {
+  if (input === undefined || input === null) return { value: null, error: null };
+  if (!Array.isArray(input)) return { value: null, error: `${fieldName} must be an array of strings when set` };
+  if (input.length === 0) return { value: null, error: null };
+  if (input.length > 32) return { value: null, error: `${fieldName} must have at most 32 items` };
+  for (const item of input) {
+    if (typeof item !== 'string' || item.length === 0) {
+      return { value: null, error: `${fieldName} must contain only non-empty strings` };
+    }
+    if (item.length > 512) {
+      return { value: null, error: `${fieldName} items must be ≤ 512 chars each` };
+    }
+  }
+  return { value: JSON.stringify(input), error: null };
+}
+
 // ─── POST /v1/requests — Create help request ──────────────────────────────────
 
 requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
@@ -126,16 +150,39 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
     targetAgentId = target.id;
   }
 
+  // v1.2 (2026-07-01) — structured coordination fields per T-059.
+  // Validate array shapes + string types; NO validation that referenced IDs
+  // exist (cross-table lookups would slow the hot write path; graph integrity
+  // is a read-time concern for v1.2).
+  const referencesJson = validateStringArray(input.references, 'references');
+  if (referencesJson.error) return c.json(error('VALIDATION_ERROR', referencesJson.error, 400).body, 400);
+  const artifactsJson = validateStringArray(input.artifacts, 'artifacts');
+  if (artifactsJson.error) return c.json(error('VALIDATION_ERROR', artifactsJson.error, 400).body, 400);
+  if (input.supersedes !== undefined && (typeof input.supersedes !== 'string' || input.supersedes.length === 0)) {
+    return c.json(error('VALIDATION_ERROR', 'supersedes must be a non-empty string when set', 400).body, 400);
+  }
+  if (input.blocking !== undefined && (typeof input.blocking !== 'string' || input.blocking.length === 0)) {
+    return c.json(error('VALIDATION_ERROR', 'blocking must be a non-empty string when set', 400).body, 400);
+  }
+  if (input.action_required !== undefined && input.action_required !== 'fyi' && input.action_required !== 'act') {
+    return c.json(error('VALIDATION_ERROR', "action_required must be 'fyi' or 'act' when set", 400).body, 400);
+  }
+  // Smart server-side default per CeeCee's Tier-2 refinement:
+  // directed request (target set) → 'act'; broadcast (no target) → 'fyi'.
+  // Keeps the triage signal always-populated even when the writer omits the field.
+  const actionRequired = input.action_required ?? (targetAgentId ? 'act' : 'fyi');
+
   const id = generateId();
   const timestamp = now();
   const expiresAt = new Date(Date.now() + expiresInHours * 3600 * 1000).toISOString();
 
-  // Insert request row (v1.1: includes target_agent_id + scope_claim_json)
+  // Insert request row (v1.1: target_agent_id + scope_claim_json; v1.2: 5 structured coordination fields)
   await c.env.DB.prepare(`
     INSERT INTO requests (id, requester_id, title, body, request_type, priority,
                           max_responses, context, expires_at, created_at, updated_at,
-                          target_agent_id, scope_claim_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          target_agent_id, scope_claim_json,
+                          references_json, supersedes, artifacts_json, action_required, blocking)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id,
     auth.agent_id,
@@ -149,7 +196,12 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
     timestamp,
     timestamp,
     targetAgentId,
-    scopeClaimJson
+    scopeClaimJson,
+    referencesJson.value,
+    input.supersedes ?? null,
+    artifactsJson.value,
+    actionRequired,
+    input.blocking ?? null
   ).run();
 
   // Insert request_tags rows
@@ -176,6 +228,12 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
       // v1.1 audit fields
       target_agent_id: targetAgentId,
       scope_claim: scopeClaimJson ? JSON.parse(scopeClaimJson) : null,
+      // v1.2 audit fields — coordination graph shape
+      references: input.references ?? null,
+      supersedes: input.supersedes ?? null,
+      artifacts: input.artifacts ?? null,
+      action_required: actionRequired,
+      blocking: input.blocking ?? null,
     }
   });
 
