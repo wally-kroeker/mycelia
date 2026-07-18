@@ -9,6 +9,7 @@
 import migration0001 from '../../migrations/0001_initial.sql?raw';
 import migration0003 from '../../migrations/0003_partial_unique_claim_active.sql?raw';
 import migration0004 from '../../migrations/0004_rate_limits_d1.sql?raw';
+import migration0006 from '../../migrations/0006_widen_request_type_ops_bus.sql?raw';
 import { createD1Test, D1Adapter } from './_d1-adapter';
 
 // migration0002 (scope-claim / targeted requests) lives on the PR #3 branch.
@@ -20,7 +21,10 @@ const MIGRATION_0002_TEST_STUB = `
   ALTER TABLE responses ADD COLUMN body_tier TEXT;
 `;
 
-const MIGRATIONS = [migration0001, MIGRATION_0002_TEST_STUB, migration0003, migration0004];
+// migration0006 (v1.2 ops-bus request types) rebuilds the requests table with a
+// widened CHECK and seeds the six matching ops-bus capability tags — the tests
+// that post ops-bus request types depend on both halves.
+const MIGRATIONS = [migration0001, MIGRATION_0002_TEST_STUB, migration0003, migration0004, migration0006];
 
 export function createMockKV() {
   const store = new Map<string, string>();
