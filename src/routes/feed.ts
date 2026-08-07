@@ -3,6 +3,7 @@ import type { Env, AuthContext } from '../types';
 import { authMiddleware } from '../middleware/auth';
 import { isFeedScoped, type NodeMode } from '../middleware/fleet-gate';
 import { rateLimit } from '../middleware/rate-limit';
+import { readRevocationCheck } from '../middleware/read-revocation-check';
 import { kvCacheGet } from '../lib/kv';
 import { parsePagination, paginatedQuery } from '../lib/db';
 import { success, error } from '../lib/utils';
@@ -12,7 +13,7 @@ const feed = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
 feed.use('*', authMiddleware);
 
 // GET /v1/feed — Paginated activity feed from audit_log, enriched with actor names
-feed.get('/', rateLimit('feed'), async (c) => {
+feed.get('/', rateLimit('feed'), readRevocationCheck, async (c) => {
   const agentId = c.req.query('agent_id');
   const eventType = c.req.query('event_type');
   const since = c.req.query('since');

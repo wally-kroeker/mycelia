@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, AuthContext, ProposeTagInput } from '../types';
 import { authMiddleware, requireAgentKey } from '../middleware/auth';
+import { readRevocationCheck } from '../middleware/read-revocation-check';
 import { writeAuditLog } from '../lib/audit';
 import { kvCacheGet } from '../lib/kv';
 import { success, error, now } from '../lib/utils';
@@ -10,7 +11,7 @@ const capabilities = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } 
 capabilities.use('*', authMiddleware);
 
 // GET /v1/capabilities — List all capability tags
-capabilities.get('/', async (c) => {
+capabilities.get('/', readRevocationCheck, async (c) => {
   const category = c.req.query('category');
 
   let query = 'SELECT id, tag, category, description FROM capabilities';
