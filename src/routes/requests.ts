@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env, AuthContext, CreateRequestInput, RequestType, Priority } from '../types';
 import { authMiddleware, requireAgentKey } from '../middleware/auth';
 import { isScopeClaimEnforced, type NodeMode } from '../middleware/fleet-gate';
+import type { ActionRequired } from '../types';
 import { writeAuditLog } from '../lib/audit';
 import { parsePagination, paginatedQuery } from '../lib/db';
 import { success, error, generateId, now } from '../lib/utils';
@@ -9,6 +10,30 @@ import { afterCancel, InvalidTransitionError } from '../models/state-machine';
 import { rateLimit } from '../middleware/rate-limit';
 import { validateScopeClaim } from '../lib/scope-claim';
 import { readRevocationCheck } from '../middleware/read-revocation-check';
+
+/**
+ * v1.2 helper: validate an optional string-array input field. Returns either
+ * a JSON-stringified value (for DB storage) or an error message. NULL when
+ * input absent — matches DB column nullability.
+ */
+function validateStringArray(
+  input: unknown,
+  fieldName: string,
+): { value: string | null; error: string | null } {
+  if (input === undefined || input === null) return { value: null, error: null };
+  if (!Array.isArray(input)) return { value: null, error: `${fieldName} must be an array of strings when set` };
+  if (input.length === 0) return { value: null, error: null };
+  if (input.length > 32) return { value: null, error: `${fieldName} must have at most 32 items` };
+  for (const item of input) {
+    if (typeof item !== 'string' || item.length === 0) {
+      return { value: null, error: `${fieldName} must contain only non-empty strings` };
+    }
+    if (item.length > 512) {
+      return { value: null, error: `${fieldName} items must be ≤ 512 chars each` };
+    }
+  }
+  return { value: JSON.stringify(input), error: null };
+}
 
 const requests = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
 
@@ -36,10 +61,34 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
     return c.json(error('VALIDATION_ERROR', 'body must be 20-10,000 characters', 400).body, 400);
   }
 
-  // Validate request_type
-  const validTypes: RequestType[] = ['review', 'validation', 'second-opinion', 'council', 'fact-check', 'summarize', 'translate', 'debug'];
+  // Validate request_type — v1.2 adds lifecycle and ops-bus types alongside the original eval-surface eight.
+  const EVAL_SURFACE_TYPES: RequestType[] = [
+    'review', 'validation', 'second-opinion', 'council', 'fact-check', 'summarize', 'translate', 'debug',
+  ];
+  const LIFECYCLE_TYPES: RequestType[] = ['ack-close', 'abandon'];
+  const OPS_BUS_TYPES: RequestType[] = ['handoff', 'collision-warn', 'status-sync', 'delegate', 'blocker'];
+  const validTypes: RequestType[] = [...EVAL_SURFACE_TYPES, ...LIFECYCLE_TYPES, ...OPS_BUS_TYPES];
+
   if (!input.request_type || !validTypes.includes(input.request_type)) {
     return c.json(error('VALIDATION_ERROR', `request_type must be one of: ${validTypes.join(', ')}`, 400).body, 400);
+  }
+
+  // Ops-bus gate (Phase 2: mode only; Phase 3 will add agent_tier check).
+  // Lifecycle types (ack-close, abandon) are universally available — no gate.
+  if (OPS_BUS_TYPES.includes(input.request_type)) {
+    const requestMode = (c.env.MODE ?? 'community') as NodeMode;
+    if (requestMode === 'community') {
+      return c.json(
+        error(
+          'FORBIDDEN',
+          `request_type=${input.request_type} requires fleet or company mode. ` +
+          `Community nodes use peer request types and lifecycle types only.`,
+          403
+        ).body,
+        403
+      );
+    }
+    // Tier check (agent_tier in AuthContext) will be added in Phase 3.
   }
 
   // Validate priority
@@ -126,19 +175,43 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
     targetAgentId = target.id;
   }
 
+  // v1.2 — structured coordination fields.
+  // Validate array shapes + string types; NO validation that referenced IDs
+  // exist (cross-table lookups would slow the hot write path; graph integrity
+  // is a read-time concern for v1.2).
+  const referencesJson = validateStringArray(input.references, 'references');
+  if (referencesJson.error) return c.json(error('VALIDATION_ERROR', referencesJson.error, 400).body, 400);
+  const artifactsJson = validateStringArray(input.artifacts, 'artifacts');
+  if (artifactsJson.error) return c.json(error('VALIDATION_ERROR', artifactsJson.error, 400).body, 400);
+  if (input.supersedes !== undefined && (typeof input.supersedes !== 'string' || input.supersedes.length === 0)) {
+    return c.json(error('VALIDATION_ERROR', 'supersedes must be a non-empty string when set', 400).body, 400);
+  }
+  if (input.blocking !== undefined && (typeof input.blocking !== 'string' || input.blocking.length === 0)) {
+    return c.json(error('VALIDATION_ERROR', 'blocking must be a non-empty string when set', 400).body, 400);
+  }
+  if (input.action_required !== undefined && input.action_required !== 'fyi' && input.action_required !== 'act') {
+    return c.json(error('VALIDATION_ERROR', "action_required must be 'fyi' or 'act' when set", 400).body, 400);
+  }
+  // Smart server-side default: directed request (target set) → 'act';
+  // broadcast (no target) → 'fyi'. Keeps the triage signal always-populated
+  // even when the writer omits the field.
+  const actionRequired: ActionRequired = input.action_required ?? (targetAgentId ? 'act' : 'fyi');
+
   const id = generateId();
   const timestamp = now();
   const expiresAt = new Date(Date.now() + expiresInHours * 3600 * 1000).toISOString();
 
-  // Atomic batch: INSERT requests (v1.1: target_agent_id + scope_claim_json) +
-  // INSERT request_tags + UPDATE agents request_count. D1's batch() wraps these
-  // in an implicit transaction — all succeed or all roll back (B7 fix preserved).
+  // Atomic batch: INSERT requests (v1.1: target_agent_id + scope_claim_json;
+  // v1.2: 5 structured coordination fields) + INSERT request_tags + UPDATE agents
+  // request_count. D1's batch() wraps these in an implicit transaction — all
+  // succeed or all roll back (B7 fix preserved).
   const batchStatements = [
     c.env.DB.prepare(`
       INSERT INTO requests (id, requester_id, title, body, request_type, priority,
                             max_responses, context, expires_at, created_at, updated_at,
-                            target_agent_id, scope_claim_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            target_agent_id, scope_claim_json,
+                            references_json, supersedes, artifacts_json, action_required, blocking)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       auth.agent_id,
@@ -152,7 +225,12 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
       timestamp,
       timestamp,
       targetAgentId,
-      scopeClaimJson
+      scopeClaimJson,
+      referencesJson.value,
+      input.supersedes ?? null,
+      artifactsJson.value,
+      actionRequired,
+      input.blocking ?? null
     ),
   ];
   for (const capId of capabilityIds) {
@@ -182,6 +260,12 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
         // v1.1 audit fields
         target_agent_id: targetAgentId,
         scope_claim: scopeClaimJson ? JSON.parse(scopeClaimJson) : null,
+        // v1.2 audit fields — coordination graph shape
+        references: input.references ?? null,
+        supersedes: input.supersedes ?? null,
+        artifacts: input.artifacts ?? null,
+        action_required: actionRequired,
+        blocking: input.blocking ?? null,
       }
     });
   } catch (auditErr) {

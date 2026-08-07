@@ -7,20 +7,17 @@
 // transform time so no fs access is needed at runtime.
 
 import migration0001 from '../../migrations/0001_initial.sql?raw';
+import migration0002 from '../../migrations/0002_targeted_mycelia.sql?raw';
 import migration0003 from '../../migrations/0003_partial_unique_claim_active.sql?raw';
 import migration0004 from '../../migrations/0004_rate_limits_d1.sql?raw';
+import migration0005 from '../../migrations/0005_tier_rename_personal_sealed.sql?raw';
+import migration0006 from '../../migrations/0006_widen_request_type_ops_bus.sql?raw';
+import migration0007 from '../../migrations/0007_add_structured_coordination_fields.sql?raw';
 import { createD1Test, D1Adapter } from './_d1-adapter';
 
-// migration0002 (scope-claim / targeted requests) lives on the PR #3 branch.
-// Add just the two columns it introduces so integration tests can seed directed
-// requests without requiring the full migration to be present on main.
-const MIGRATION_0002_TEST_STUB = `
-  ALTER TABLE requests ADD COLUMN target_agent_id TEXT REFERENCES agents(id);
-  ALTER TABLE requests ADD COLUMN scope_claim_json TEXT;
-  ALTER TABLE responses ADD COLUMN body_tier TEXT;
-`;
-
-const MIGRATIONS = [migration0001, MIGRATION_0002_TEST_STUB, migration0003, migration0004];
+// All seven migrations applied in sequence. Phase 2 adds migrations 0006 and 0007;
+// migration0002 is now on main (no longer a stub).
+const MIGRATIONS = [migration0001, migration0002, migration0003, migration0004, migration0005, migration0006, migration0007];
 
 export function createMockKV() {
   const store = new Map<string, string>();
@@ -109,12 +106,19 @@ export interface SeededRequest {
 export async function seedDirectedRequest(
   env: TestEnv,
   agents: SeededAgents,
-  options: { askMaxTier?: 'public' | 'cohort' | 'personal'; status?: string } = {}
+  options: {
+    askMaxTier?: 'public' | 'cohort' | 'personal';
+    status?: string;
+    request_type?: string;
+    action_required?: 'fyi' | 'act';
+  } = {}
 ): Promise<SeededRequest> {
   const requestId = 'req-' + crypto.randomUUID();
   const ts = new Date().toISOString();
   const askMaxTier = options.askMaxTier ?? 'public';
   const status = options.status ?? 'open';
+  const request_type = options.request_type ?? 'second-opinion';
+  const action_required = options.action_required ?? 'act';
   const scopeClaim = JSON.stringify({
     requester: 'test',
     agent_id: agents.requesterId,
@@ -126,14 +130,15 @@ export async function seedDirectedRequest(
   await env.DB.prepare(
     `INSERT INTO requests (
       id, requester_id, title, body, request_type, priority, status, max_responses,
-      response_count, expires_at, created_at, updated_at, target_agent_id, scope_claim_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      response_count, expires_at, created_at, updated_at, target_agent_id, scope_claim_json,
+      action_required
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     requestId,
     agents.requesterId,
     'Integration test request',
     'A request body that is at least twenty characters long for the validator.',
-    'second-opinion',
+    request_type,
     'normal',
     status,
     3,
@@ -142,7 +147,8 @@ export async function seedDirectedRequest(
     ts,
     ts,
     agents.responderId,
-    scopeClaim
+    scopeClaim,
+    action_required
   ).run();
 
   return { requestId };
