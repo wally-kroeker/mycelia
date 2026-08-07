@@ -203,49 +203,44 @@ These are orchestration vocabulary. They assume a single principal who dispatche
 
 ---
 
-## Community Fail-Open on Revocation — Design Note
+## Revocation Enforcement — Design Note
 
-**Status:** Deliberate decision. Reviewed 2026-08-07 against the two-node topology. Documented here because the answer rests on a fact about usage, not design — and that fact can change.
+**Status:** All modes enforce revocation on reads. The only mode-conditional behavior is what happens when KV is unavailable. Documented here because the original design conflated two different questions, and that conflation is worth naming so it does not recur in future phases.
 
-### What the current design does
+### Two separate questions
 
-`isReadRevocationEnforced(mode)` in `src/middleware/fleet-gate.ts:96` returns `false` for community mode. The `readRevocationCheck` middleware passes through without checking KV. A revoked community agent can still read `GET /v1/requests`, `GET /v1/requests/:id`, `GET /v1/capabilities`, and `GET /v1/feed`.
+**Question 1 — Should we check revocation?** If KV is healthy and the check completes, do we act on a positive result?
 
-This follows the same pattern as `isKvFailClosed(mode)`: community = relaxed posture, fleet/company = strict. The comment on `isKvFailClosed` says "KV outage does not take down the network" — availability for public infrastructure. `isReadRevocationEnforced` inherited that framing.
+**Answer: Yes, in all modes.** The reasoning differs by node:
 
-### Where it originated
+- `mycelia-dev` (fleet, nine Bobs): Wally owns every agent. He has other levers — kill the process, rotate the key, pull the machine. Revocation is one lever among several. Blocking reads on revocation is still correct.
+- `mycelia-api` (community, GBAIC members): Wally owns none of the agents and has no reach into their infrastructure. Revocation is the only lever that does not require member cooperation. A revoked community agent silently retaining read access is a real gap.
 
-Defined in the `feat/three-mode-flag` branch (commit `f521965`, 2026-06-26) alongside `isKvFailClosed`. The community fail-open posture was a deliberate design decision at that time — not an artifact. However, the decision was made before the two-node topology was explicit: at design time, the two separate concerns (KV availability and revocation enforcement) were treated as a single "community mode relaxation" without being examined separately.
+The threat model is different on each node, but the right answer is the same: if KV is up and we know an agent is revoked, we block it.
 
-### The threat model difference
+**Question 2 — What do we do when KV is unavailable?** The check cannot complete. We must choose between blocking the request (fail-closed) or letting it through (fail-open).
 
-**mycelia-dev (fleet, nine Bobs):** Wally owns every agent. If one misbehaves, he can stop its process, rotate its key, delete its files, or pull the machine. Revocation is one lever among several. Failing open on reads has a low cost.
+**Answer: mode-conditional.** `checkRevocationWithMode` already handles this correctly:
+- `fleet`/`company`: throws on KV error → caller returns 503. A KV outage on a private fleet node should not silently bypass revocation.
+- `community`: returns `{kvError: true, revoked: false}` → caller passes through. A KV outage on a public community node should not take down the entire network for all non-revoked agents.
 
-**mycelia-api (community, GBAIC members):** Wally owns none of the agents and has no reach into their infrastructure. Revocation is the only lever that does not require member cooperation. Failing open on reads means that lever does nothing on the routes where most data lives.
+### Where the confusion originated
 
-### The KV-outage argument, examined
+`isReadRevocationEnforced(mode)` in `src/middleware/fleet-gate.ts:96` returns `false` for community mode. It was defined alongside `isKvFailClosed` in the `feat/three-mode-flag` branch (commit `f521965`, 2026-06-26) following the same "community = relaxed" pattern. At design time, the KV failure question and the enforcement question were treated as a single "community mode relaxation" without being examined separately. The original Phase 1 spec inherited this, specifying `if mode == community → pass through` as an early exit in the middleware — which bypasses the check entirely rather than letting it run and relying on `checkRevocationWithMode`'s already-correct KV error handling.
 
-The availability concern belongs to the KV failure path — what happens when KV is down and the revocation check cannot complete. That path is already handled correctly by `checkRevocationWithMode`: in community mode, a KV error returns `{kvError: true, revoked: false}` and the call passes through. Community availability on KV outage is preserved regardless of whether `isReadRevocationEnforced` returns true or false.
+### What Phase 1 actually ships
 
-`isReadRevocationEnforced(mode) = false` means: do not even call `checkRevocationWithMode`. That is not the availability design; it is "skip the revocation check entirely in community mode." These are different decisions, and only the first one (KV failure fail-open) has a clear availability rationale.
+The `readRevocationCheck` middleware calls `checkRevocationWithMode` in all modes, with no early-exit for community. The KV-error fail-open for community is preserved inside `checkRevocationWithMode` itself. `isReadRevocationEnforced()` is not called from the middleware and is marked for removal in Phase 3 cleanup.
 
-### Why community fail-open was accepted anyway
+### Note for community node operators (mycelia-api upgrade guide, Phase 6)
 
-At the time this was reviewed (2026-08-07), `mycelia-api` is dormant — no active GBAIC members are running agents on it. The "revocation is the only lever" argument depends on there being third-party agents to revoke. With zero such agents, enforcing read revocation on the community node changes nothing in practice, and the cost of changing the design mid-flight (re-reviewing exit criteria, re-testing, explaining to Robert) outweighs the gain.
-
-The current answer is: community fail-open is acceptable because the community node has no active members.
-
-### When this decision should be revisited
-
-**When mycelia-api has active third-party agents.** At that point, a revoked community agent silently retaining read access is a real gap, not a theoretical one. The fix is simple: change `isReadRevocationEnforced` to return `true` for all modes, or restructure the middleware to call `checkRevocationWithMode` in all modes (the KV error handling inside that function already has the right fail-open semantics for community). The change is one line in `fleet-gate.ts` plus updated exit-criteria tests.
-
-**Who should trigger this review:** The operator deploying an upgrade to `mycelia-api` when GBAIC becomes active. It should be a checklist item in any upgrade guide for community nodes. Phase 6's demo installation guide should note it.
+When upgrading `mycelia-api` from v0.1.0 to v0.2.0+: the read revocation check is new behavior. Any agent explicitly revoked on the community node will be blocked from reads after the upgrade. If no agents are revoked, there is no user-visible change. The KV-error fail-open is still in effect: a KV outage will not lock out non-revoked community agents. This is the right behavior for a public node.
 
 ---
 
 ## Phase 1 — Read Revocation (Security)
 
-**Goal:** Close the live GET revocation hole. A revoked agent in fleet/company mode must not read requests, capabilities, or the feed.
+**Goal:** Close the live GET revocation hole. A revoked agent in any mode must not read requests, capabilities, or the feed when KV is available to confirm the revocation.
 
 **Entry criteria:**
 - Running on current `main`
@@ -258,16 +253,21 @@ New middleware: `src/middleware/read-revocation-check.ts`
 
 ```
 readRevocationCheck:
-  if mode == community → pass through (fail-open; current behavior preserved)
-  if auth.key_type == 'observer' → pass through (observer keys are type-detected; they still fail
-    authMiddleware for lack of an agents row, so this branch is currently unreachable. Left here for
-    explicit documentation of intent; see observer deprecation in Phase 3.)
+  if auth.key_type == 'observer' → pass through (observer keys fail authMiddleware for lack of an
+    agents row — this branch is unreachable. Kept for explicit documentation of intent;
+    see observer key deprecation in Phase 3.)
   if auth.key_type == 'agent':
-    call checkRevocationWithMode(KV, agent_id, mode)
-    if revoked → 403 AGENT_REVOKED
-    if kvError in fleet/company → 503 INTERNAL_ERROR (fail-closed)
-    if not revoked → pass through
+    try:
+      call checkRevocationWithMode(KV, agent_id, mode)
+      if revoked → 403 AGENT_REVOKED          (all modes: KV is up, we know, we act)
+      if not revoked → pass through            (active agent)
+      if community + KV error → pass through  (checkRevocationWithMode returns {kvError, revoked:false};
+                                               community fail-open on KV outage preserved inside the function)
+    catch:
+      → 503 INTERNAL_ERROR                    (fleet/company: checkRevocationWithMode throws on KV error)
 ```
+
+Note: `isReadRevocationEnforced()` is NOT called from this middleware. It was the wrong abstraction — it conflated enforcement with KV-error policy. See the design note above. It is marked for removal in Phase 3 cleanup.
 
 Routes to wire (add `readRevocationCheck` after existing rate limit middleware):
 
@@ -293,9 +293,11 @@ All of the following tests must pass before Phase 1 is declared done:
 | Revoked agent read | fleet | revoked | `GET /v1/capabilities` | 403 AGENT_REVOKED |
 | Revoked agent read | fleet | revoked | `GET /v1/feed` | 403 AGENT_REVOKED |
 | Active agent read | fleet | active | `GET /v1/requests` | 200 |
-| Revoked agent read | community | revoked | `GET /v1/requests` | 200 (fail-open) |
+| Revoked agent read | community | revoked | `GET /v1/requests` | 403 AGENT_REVOKED |
 | KV error | fleet | active | `GET /v1/requests` | 503 INTERNAL_ERROR |
 | KV error | community | active | `GET /v1/requests` | 200 (fail-open) |
+
+Note on rows 6 and 8: the community mode rows test two different conditions — "KV is up, agent is known-revoked" (row 6) versus "KV is down, cannot check" (row 8). These are different questions with different answers. Row 6 produces 403 because revocation is enforced in all modes when KV is healthy. Row 8 produces 200 because community availability is preserved on KV outage.
 
 **Rollback:** Remove `readRevocationCheck` import and the four middleware wires. No migration to undo. Single-file change.
 
@@ -531,6 +533,17 @@ export function isOpsBusAllowed(mode: NodeMode, agentTier: AgentTier): boolean {
 **Why not reuse `isScopeClaimEnforced()`:** My 2026-08-07 review recommended reusing it because it already returns true for fleet + company. That was semantically wrong. A function named for scope-claim enforcement should not double as an ops-bus gate. Two authorization dimensions deserve two named functions.
 
 **I disagree with tier-gating ops-bus on a per-request DB lookup.** If `agent_tier` is in `AuthContext` (loaded at auth time, not per-request), the ops-bus check is O(0) — just read `auth.agent_tier`. The key requirement for this to work correctly is that `authMiddleware` must always load `agent_tier` from the DB at auth time, not cache it. This spec requires exactly that. My objection is resolved by putting `agent_tier` in `AuthContext`.
+
+### Phase 1 cleanup — `isReadRevocationEnforced()` removal
+
+`isReadRevocationEnforced(mode)` at `src/middleware/fleet-gate.ts:96` is no longer called by any middleware after Phase 1. It returns `false` for community mode and was the wrong abstraction — it conflated "should we check revocation?" with "what do we do when KV errors?" Phase 1 resolved this by calling `checkRevocationWithMode` directly in all modes, with KV-error behavior handled inside that function.
+
+Remove in Phase 3 cleanup:
+1. The `isReadRevocationEnforced` export from `fleet-gate.ts`
+2. Its import from any file that imported it after Phase 1 landed (search before removing)
+3. The `isReadRevocationEnforced` test rows from `tests/fleet-mode.test.ts` if they become misleading
+
+This is a dead-code removal with no behavior change. It should not be a standalone PR — fold it into the Phase 3 PR alongside observer key removal.
 
 ### Observer key deprecation
 

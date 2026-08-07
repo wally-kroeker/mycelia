@@ -118,11 +118,16 @@ describe('Phase 1 — readRevocationCheck: fleet mode, active agent', () => {
   });
 });
 
-describe('Phase 1 — readRevocationCheck: community mode, revoked agent (fail-open)', () => {
-  it('GET /v1/requests — community mode: revoked agent passes through (200)', async () => {
+describe('Phase 1 — readRevocationCheck: community mode, revoked agent', () => {
+  it('GET /v1/requests — community mode: revoked agent gets 403 AGENT_REVOKED', async () => {
+    // Revocation is enforced in all modes when KV is healthy.
+    // The fail-open applies only to KV *errors*, not to the enforcement question —
+    // if KV is up and the agent is known-revoked, we act regardless of mode.
     await revokeInKv(env, agents.requesterId);
     const res = await app.fetch(getReq('/v1/requests', agents.requesterKey), communityEnv(env));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
+    const body = await res.json() as { error: { code: string } };
+    expect(body.error.code).toBe('AGENT_REVOKED');
   });
 });
 

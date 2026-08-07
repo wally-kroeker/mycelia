@@ -2,25 +2,30 @@
 //
 // Hono middleware: enforce read revocation on GET routes.
 // Closes the "read-bypass" gap (fleet-coordination-v1, Phase 1) where revoked
-// agents in fleet/company mode could still read requests, capabilities, and the feed.
+// agents could still read requests, capabilities, and the feed.
 //
 // Wired to: GET /v1/requests, GET /v1/requests/:id, GET /v1/capabilities, GET /v1/feed
 //
 // Design:
-//   community mode — fail-open: pass through without checking. See the community
-//     fail-open design note in openspec/changes/fleet-coordination-v1/proposal.md
-//     for the rationale and the conditions under which this decision should be revisited.
-//   fleet/company mode — enforced: revoked agents get 403 AGENT_REVOKED; KV error
-//     gets 503 INTERNAL_ERROR (fail-closed, consistent with existing write-path
-//     behavior in authMiddleware).
-//   observer keys — pass through: observer keys are rejected by authMiddleware before
-//     this middleware runs (no agents row → 401). Branch is unreachable; kept for
-//     explicit documentation of intent. See observer deprecation in Phase 3.
+//   All modes: revoked agent → 403 AGENT_REVOKED (KV is healthy, we know, we act).
+//   fleet/company: KV error → 503 INTERNAL_ERROR (fail-closed; security over availability).
+//   community: KV error → pass through (fail-open; a KV outage must not take down
+//     a public community node for all non-revoked agents). This is the only
+//     mode-conditional behavior. The fail-open on KV error is already implemented
+//     inside checkRevocationWithMode — no separate community branch is needed here.
+//   observer keys: pass through (observer keys are rejected by authMiddleware before
+//     this middleware runs — no agents row → 401). Branch is unreachable; kept for
+//     explicit documentation of intent. See observer key deprecation in Phase 3.
+//
+// Note: isReadRevocationEnforced() from fleet-gate.ts is intentionally NOT called here.
+// That function returns false for community mode and was the wrong abstraction — it
+// conflated "should we check revocation?" with "what do we do on KV error?". Only
+// the second question is mode-conditional. isReadRevocationEnforced() is marked for
+// removal in Phase 3 cleanup.
 
 import type { Context, Next } from 'hono';
 import type { Env, AuthContext } from '../types';
 import {
-  isReadRevocationEnforced,
   checkRevocationWithMode,
   type NodeMode,
   type RevocationResult,
@@ -31,12 +36,6 @@ export async function readRevocationCheck(
   next: Next
 ): Promise<Response | void> {
   const mode = (c.env.MODE ?? 'community') as NodeMode;
-
-  // community mode: fail-open (no revocation check on reads)
-  if (!isReadRevocationEnforced(mode)) {
-    return next();
-  }
-
   const auth = c.get('auth');
 
   // observer keys cannot pass authMiddleware (no agents row → 401 before we run).
@@ -64,10 +63,11 @@ export async function readRevocationCheck(
         403
       );
     }
-    // result.revoked === false: active agent, pass through.
-    // kvError with revoked: false: community fail-open, already handled by
-    // isReadRevocationEnforced returning false for community. This branch is
-    // unreachable because fleet/company throws on KV error (caught below).
+    // result.revoked === false in two cases:
+    //   1. Active agent (KV healthy) → pass through.
+    //   2. Community + KV error → checkRevocationWithMode returns {kvError: true, revoked: false}
+    //      rather than throwing (fail-open for public nodes). Pass through.
+    // fleet/company + KV error throws instead — caught below.
   } catch {
     // fleet/company: checkRevocationWithMode re-throws on KV error (fail-closed).
     // Return 503 so the read is rejected rather than silently bypassing revocation.
