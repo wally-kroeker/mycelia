@@ -88,6 +88,9 @@ export interface HelpRequest {
   artifacts_json: string | null;    // JSON array of URLs / SHAs / file paths bundled
   action_required: ActionRequired | null;
   blocking: string | null;          // prior request ID whose response this waits on
+  // v1.3 — written on ack-close (Phase 4).
+  // JSON: { summary?: string, quality?: 1|2|3|4|5, closed_by: string, closed_at: string }
+  outcome_json: string | null;
 }
 
 export type ActionRequired = 'fyi' | 'act';
@@ -111,7 +114,10 @@ export type RequestType =
 
 export type Priority = 'low' | 'normal' | 'high';
 
-export type RequestStatus = 'open' | 'claimed' | 'responded' | 'rated' | 'closed' | 'expired' | 'cancelled';
+// v1.3 — add 'ack-closed' (Phase 4: lifecycle mechanics).
+// ack-closed: requester acknowledged receipt via POST /v1/requests/:id/ack-close.
+// Terminal state; rating row auto-created with score=quality|NULL, cross_owner from DB join.
+export type RequestStatus = 'open' | 'claimed' | 'responded' | 'rated' | 'closed' | 'expired' | 'cancelled' | 'ack-closed';
 
 export interface RequestTag {
   request_id: string;
@@ -150,12 +156,20 @@ export interface Rating {
   response_id: string;
   rater_id: string;
   direction: RatingDirection;
-  score: number;
+  // v1.3: nullable (Phase 4). NULL means acknowledged without a quality score.
+  // A deliberate middling score is 3, not NULL. Trust aggregation excludes NULL.
+  score: number | null;
   feedback: string | null;
   created_at: string;
+  // v1.3: cross-owner flag (Phase 4). 1=different owner_id (feeds trust), 0=same owner.
+  // Computed from DB join at insert time — never from AuthContext.
+  cross_owner: 0 | 1;
+  // v1.3: origin of this rating row.
+  source_type: RatingSourceType;
 }
 
 export type RatingDirection = 'requester_rates_helper' | 'helper_rates_requester';
+export type RatingSourceType = 'standard' | 'ack-close';
 
 export interface AuditLogEntry {
   id: number;
@@ -277,6 +291,16 @@ export interface CreateRequestInput {
 export interface CreateClaimInput {
   estimated_minutes?: number;
   note?: string;
+}
+
+// v1.3 — Phase 4 lifecycle mechanics inputs.
+
+export interface AckCloseInput {
+  // quality: 1-5 rating score. NULL when omitted — acknowledged without scoring.
+  // A deliberate middling score is 3, not omitted.
+  quality?: number;
+  // summary: free-form outcome note written to outcome_json. Optional.
+  summary?: string;
 }
 
 export interface CreateResponseInput {

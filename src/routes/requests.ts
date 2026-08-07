@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { Env, AuthContext, CreateRequestInput, RequestType, Priority } from '../types';
+import type { Env, AuthContext, CreateRequestInput, RequestType, Priority, AckCloseInput } from '../types';
 import { authMiddleware, requireAgentKey } from '../middleware/auth';
 import { isScopeClaimEnforced, isOpsBusAllowed, type NodeMode } from '../middleware/fleet-gate';
 import type { ActionRequired } from '../types';
@@ -406,6 +406,125 @@ requests.delete('/:id', requireAgentKey, async (c) => {
   });
 
   return c.json(success({ request: { id, status: newStatus } }));
+});
+
+// ─── POST /v1/requests/:id/ack-close — acknowledge receipt of a response ──────
+//
+// Requester acknowledges that the responded request has been received.
+// Transitions: responded → ack-closed (terminal).
+//
+// Auto-creates a rating row:
+//   - score = quality (1-5) if supplied, NULL if absent
+//   - cross_owner computed from DB join (NOT from AuthContext)
+//   - source_type = 'ack-close'
+//
+// Atomic: all writes in DB.batch() so the status change and rating row
+// either both commit or both fail.
+
+requests.post('/:id/ack-close', requireAgentKey, rateLimit('request.create'), async (c) => {
+  const auth = c.get('auth');
+  const requestId = c.req.param('id');
+
+  let input: AckCloseInput = {};
+  try {
+    const body = await c.req.json();
+    if (body && typeof body === 'object') input = body as AckCloseInput;
+  } catch {
+    // empty body is fine — both fields are optional
+  }
+
+  // Validate quality if present
+  if (input.quality !== undefined) {
+    if (typeof input.quality !== 'number' || !Number.isInteger(input.quality) ||
+        input.quality < 1 || input.quality > 5) {
+      return c.json(error('VALIDATION_ERROR', 'quality must be an integer 1-5 when provided', 400).body, 400);
+    }
+  }
+
+  // Load request — must exist and be in responded state
+  const request = await c.env.DB.prepare(
+    'SELECT id, requester_id, status FROM requests WHERE id = ?'
+  ).bind(requestId).first<{ id: string; requester_id: string; status: string }>();
+
+  if (!request) {
+    return c.json(error('NOT_FOUND', 'Request not found', 404).body, 404);
+  }
+  if (request.requester_id !== auth.agent_id) {
+    return c.json(error('FORBIDDEN', 'Only the original requester can ack-close', 403).body, 403);
+  }
+  if (request.status !== 'responded') {
+    return c.json(
+      error('CONFLICT', `ack-close requires status=responded; current status is '${request.status}'`, 409).body,
+      409
+    );
+  }
+
+  // Find the response(s) to rate. Use the first response for the rating row.
+  // In practice most ack-close targets have one responder; multi-response is edge case.
+  const response = await c.env.DB.prepare(`
+    SELECT resp.id, resp.responder_id, a.owner_id AS responder_owner_id
+    FROM responses resp
+    JOIN agents a ON resp.responder_id = a.id
+    WHERE resp.request_id = ?
+    ORDER BY resp.created_at ASC
+    LIMIT 1
+  `).bind(requestId).first<{ id: string; responder_id: string; responder_owner_id: string }>();
+
+  if (!response) {
+    return c.json(error('NOT_FOUND', 'No response found on this request', 404).body, 404);
+  }
+
+  // cross_owner: computed from DB join — rater (requester) vs. responder owner_id.
+  // NOT derived from AuthContext which only carries the requester's owner_id.
+  const requesterAgent = await c.env.DB.prepare(
+    'SELECT owner_id FROM agents WHERE id = ?'
+  ).bind(auth.agent_id).first<{ owner_id: string }>();
+
+  if (!requesterAgent) {
+    return c.json(error('INTERNAL_ERROR', 'Could not verify agent ownership', 500).body, 500);
+  }
+
+  const crossOwner = requesterAgent.owner_id !== response.responder_owner_id ? 1 : 0;
+
+  const ratingId = generateId();
+  const timestamp = now();
+  const outcomeJson = JSON.stringify({
+    closed_by: auth.agent_id,
+    closed_at: timestamp,
+    ...(input.quality !== undefined ? { quality: input.quality } : {}),
+    ...(input.summary ? { summary: input.summary } : {}),
+  });
+
+  // Atomic batch: status transition + rating row in one commit
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      `UPDATE requests
+       SET status = 'ack-closed', closed_at = ?, updated_at = ?, outcome_json = ?
+       WHERE id = ? AND status = 'responded'`
+    ).bind(timestamp, timestamp, outcomeJson, requestId),
+    c.env.DB.prepare(
+      `INSERT INTO ratings (id, response_id, rater_id, direction, score, feedback, created_at, cross_owner, source_type)
+       VALUES (?, ?, ?, 'requester_rates_helper', ?, ?, ?, ?, 'ack-close')`
+    ).bind(ratingId, response.id, auth.agent_id, input.quality ?? null, input.summary ?? null, timestamp, crossOwner),
+  ]);
+
+  await writeAuditLog(c.env.DB, c.env.KV, {
+    event_type: 'request.closed',
+    actor_id: auth.agent_id,
+    target_type: 'request',
+    target_id: requestId,
+    detail: {
+      via: 'ack-close',
+      quality: input.quality ?? null,
+      cross_owner: crossOwner,
+      rating_id: ratingId,
+    },
+  });
+
+  return c.json(success({
+    request: { id: requestId, status: 'ack-closed' },
+    rating: { id: ratingId, score: input.quality ?? null, cross_owner: crossOwner },
+  }), 200);
 });
 
 export default requests;

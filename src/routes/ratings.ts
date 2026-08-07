@@ -34,7 +34,8 @@ ratings.post('/:id/ratings', rateLimit('rating.create'), async (c) => {
       400
     );
   }
-  if (typeof input.score !== 'number' || input.score < 1 || input.score > 5) {
+  // score is required for standard ratings (ack-close ratings are created by the server)
+  if (typeof input.score !== 'number' || !Number.isInteger(input.score) || input.score < 1 || input.score > 5) {
     return c.json(error('VALIDATION_ERROR', 'score must be an integer between 1 and 5', 400).body, 400);
   }
 
@@ -115,13 +116,20 @@ ratings.post('/:id/ratings', rateLimit('rating.create'), async (c) => {
     return c.json(error('CONFLICT', 'You have already submitted a rating in this direction', 409).body, 409);
   }
 
+  // cross_owner: computed from DB join — rater vs. rated agent.
+  // The anti-gaming check above already verified both agents; reuse the result.
+  // 1 = different owner (cross-owner, feeds community trust)
+  // 0 = same owner — blocked above, so this will always be 1 here, but computed
+  //     explicitly from the join result to match the contract (never from AuthContext).
+  const crossOwner: 0 | 1 = raterAgent.owner_id !== ratedAgent.owner_id ? 1 : 0;
+
   // Insert rating
   const ratingId = generateId();
   const createdAt = now();
 
   await c.env.DB.prepare(`
-    INSERT INTO ratings (id, response_id, rater_id, direction, score, feedback, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO ratings (id, response_id, rater_id, direction, score, feedback, created_at, cross_owner, source_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'standard')
   `).bind(
     ratingId,
     responseId,
@@ -129,7 +137,8 @@ ratings.post('/:id/ratings', rateLimit('rating.create'), async (c) => {
     input.direction,
     input.score,
     input.feedback ?? null,
-    createdAt
+    createdAt,
+    crossOwner
   ).run();
 
   // Recalculate trust scores for the rated agent
@@ -219,6 +228,8 @@ async function recalculateTrust(
         WHERE resp.responder_id = ?
           AND rt.capability_id = ?
           AND rat.direction = 'requester_rates_helper'
+          AND rat.cross_owner = 1
+          AND rat.score IS NOT NULL
       `)
       .bind(agentId, cap.capability_id)
       .all<{ score: number }>();
