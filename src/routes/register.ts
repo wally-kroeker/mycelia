@@ -129,7 +129,7 @@ register.post('/', async (c) => {
   }
 
   const id = `agt_${generateId().replace(/-/g, '').substring(0, 24)}`;
-  const { key, hash, prefix } = await generateApiKey('agent');
+  const { key, hash, prefix } = await generateApiKey();
   const timestamp = now();
 
   // Insert agent

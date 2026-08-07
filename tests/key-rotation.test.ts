@@ -3,7 +3,7 @@ import { generateApiKey, hashApiKey } from '../src/middleware/auth';
 
 describe('key rotation — key generation', () => {
   it('generates a valid agent key with correct prefix format', async () => {
-    const { key, hash, prefix } = await generateApiKey('agent');
+    const { key, hash, prefix } = await generateApiKey();
 
     expect(key).toMatch(/^mycelia_live_[a-f0-9]{64}$/);
     expect(hash).toMatch(/^[a-f0-9]{64}$/);
@@ -12,8 +12,8 @@ describe('key rotation — key generation', () => {
   });
 
   it('generates unique keys on each call', async () => {
-    const key1 = await generateApiKey('agent');
-    const key2 = await generateApiKey('agent');
+    const key1 = await generateApiKey();
+    const key2 = await generateApiKey();
 
     expect(key1.key).not.toBe(key2.key);
     expect(key1.hash).not.toBe(key2.hash);
@@ -21,22 +21,22 @@ describe('key rotation — key generation', () => {
   });
 
   it('hash matches when re-hashed (round-trip verification)', async () => {
-    const { key, hash } = await generateApiKey('agent');
+    const { key, hash } = await generateApiKey();
     const reHash = await hashApiKey(key);
 
     expect(reHash).toBe(hash);
   });
 
   it('different keys produce different hashes', async () => {
-    const { hash: hash1 } = await generateApiKey('agent');
-    const { hash: hash2 } = await generateApiKey('agent');
+    const { hash: hash1 } = await generateApiKey();
+    const { hash: hash2 } = await generateApiKey();
 
     expect(hash1).not.toBe(hash2);
   });
 
   it('old key hash does not match new key', async () => {
-    const oldKey = await generateApiKey('agent');
-    const newKey = await generateApiKey('agent');
+    const oldKey = await generateApiKey();
+    const newKey = await generateApiKey();
 
     // Simulates rotation: old hash should NOT match new key
     const oldKeyReHash = await hashApiKey(oldKey.key);
@@ -48,30 +48,31 @@ describe('key rotation — key generation', () => {
   });
 
   it('prefix is exactly 21 characters (13-char prefix + 8 hex chars)', async () => {
-    const { prefix } = await generateApiKey('agent');
+    const { prefix } = await generateApiKey();
 
     expect(prefix.length).toBe(21);
     expect(prefix.startsWith('mycelia_live_')).toBe(true);
   });
 });
 
-describe('key rotation — observer keys', () => {
-  it('generates observer key with correct prefix', async () => {
-    const { key, prefix } = await generateApiKey('observer');
-
-    expect(key).toMatch(/^mycelia_obs_[a-f0-9]{64}$/);
-    // observer prefix: 'mycelia_obs_' (12 chars) + 8 hex = 20 chars
-    expect(prefix.length).toBe(20);
-    expect(prefix.startsWith('mycelia_obs_')).toBe(true);
+// Observer key type removed in Phase 3 (fleet-coordination-v1).
+// generateApiKey('observer') no longer exists; any key with mycelia_obs_ prefix
+// returns 401 from authMiddleware (no agents row). These tests are replaced by
+// a check that generateApiKey always produces a live-prefixed key.
+describe('key generation — agent key only (Phase 3: observer type removed)', () => {
+  it('generates agent key with mycelia_live_ prefix', async () => {
+    const { key, prefix } = await generateApiKey();
+    expect(key).toMatch(/^mycelia_live_[a-f0-9]{64}$/);
+    // prefix: 'mycelia_live_' (13 chars) + 8 hex = 21 chars
+    expect(prefix.length).toBe(21);
+    expect(prefix.startsWith('mycelia_live_')).toBe(true);
   });
 
-  it('observer and agent keys are distinguishable', async () => {
-    const agent = await generateApiKey('agent');
-    const observer = await generateApiKey('observer');
-
-    expect(agent.key.startsWith('mycelia_live_')).toBe(true);
-    expect(observer.key.startsWith('mycelia_obs_')).toBe(true);
-    expect(agent.prefix).not.toBe(observer.prefix);
+  it('two generateApiKey() calls produce different keys', async () => {
+    const a = await generateApiKey();
+    const b = await generateApiKey();
+    expect(a.key).not.toBe(b.key);
+    expect(a.prefix).not.toBe(b.prefix);
   });
 });
 
