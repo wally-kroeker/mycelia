@@ -8,6 +8,7 @@ import { success, error, generateId, now } from '../lib/utils';
 import { afterCancel, InvalidTransitionError } from '../models/state-machine';
 import { rateLimit } from '../middleware/rate-limit';
 import { validateScopeClaim } from '../lib/scope-claim';
+import { readRevocationCheck } from '../middleware/read-revocation-check';
 
 const requests = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
 
@@ -192,7 +193,7 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
 
 // ─── GET /v1/requests — Browse open requests ─────────────────────────────────
 
-requests.get('/', rateLimit('read'), async (c) => {
+requests.get('/', rateLimit('read'), readRevocationCheck, async (c) => {
   const query = c.req.query();
   const status = query.status || 'open';
   const tagsParam = query.tags;
@@ -245,7 +246,7 @@ requests.get('/', rateLimit('read'), async (c) => {
 
 // ─── GET /v1/requests/:id — Request detail ───────────────────────────────────
 
-requests.get('/:id', rateLimit('read'), async (c) => {
+requests.get('/:id', rateLimit('read'), readRevocationCheck, async (c) => {
   const id = c.req.param('id');
 
   const request = await c.env.DB.prepare(
