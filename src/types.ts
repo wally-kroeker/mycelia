@@ -72,9 +72,34 @@ export interface HelpRequest {
   // v1.1 — targeted mycelia + scope envelope
   target_agent_id: string | null;
   scope_claim_json: string | null;
+  // v1.2 — structured coordination fields.
+  // Arrays stored as JSON strings (JSON1 functions for queryability).
+  // action_required has a smart server default: directed → 'act', broadcast → 'fyi'.
+  references_json: string | null;   // JSON array of prior request IDs this cites
+  supersedes: string | null;        // single prior request ID this replaces
+  artifacts_json: string | null;    // JSON array of URLs / SHAs / file paths bundled
+  action_required: ActionRequired | null;
+  blocking: string | null;          // prior request ID whose response this waits on
 }
 
-export type RequestType = 'review' | 'validation' | 'second-opinion' | 'council' | 'fact-check' | 'summarize' | 'translate' | 'debug';
+export type ActionRequired = 'fyi' | 'act';
+
+// v1.2 — widen taxonomy for operational-coordination use, additive only.
+// Original eight are eval-surface shapes ("ask an agent to evaluate something").
+// New types:
+//   lifecycle (ack-close, abandon) — universal; available in all modes.
+//     ack-close: acknowledge and wrap up a coordination thread.
+//     abandon: signal that the requester cannot proceed (route + state transition in Phase 4).
+//   ops-bus (handoff, collision-warn, status-sync, delegate, blocker) — fleet/company only.
+//     Community nodes reject ops-bus types at the application layer (fleet-gate.ts mode check).
+//     Tier enforcement (agent_tier) is added in Phase 3.
+export type RequestType =
+  // eval-surface (v1.0):
+  | 'review' | 'validation' | 'second-opinion' | 'council' | 'fact-check' | 'summarize' | 'translate' | 'debug'
+  // lifecycle (universal):
+  | 'ack-close' | 'abandon'
+  // ops-bus (fleet/company only):
+  | 'handoff' | 'collision-warn' | 'status-sync' | 'delegate' | 'blocker';
 
 export type Priority = 'low' | 'normal' | 'high';
 
@@ -230,6 +255,15 @@ export interface CreateRequestInput {
   target_agent_id?: string;
   // Required in v1.1 (grace period: tolerated absent w/ warning during rollout)
   scope_claim?: unknown; // validated by validateScopeClaim()
+  // v1.2 — structured coordination fields.
+  // All optional at write time. action_required has a smart server default
+  // (directed → 'act', broadcast → 'fyi') applied when omitted, so the triage
+  // signal is always populated even for legacy callers.
+  references?: string[];        // prior request IDs this cites
+  supersedes?: string;          // single prior request ID this replaces
+  artifacts?: string[];         // URLs / SHAs / file paths bundled with this request
+  action_required?: ActionRequired;
+  blocking?: string;            // prior request ID whose response this waits on
 }
 
 export interface CreateClaimInput {
