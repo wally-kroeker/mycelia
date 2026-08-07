@@ -15,6 +15,9 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   'read': { limit: 120, windowSeconds: 60 },
   'feed': { limit: 60, windowSeconds: 60 },
   'key.rotate': { limit: 3, windowSeconds: 3600 },
+  // Phase 5 — shipper contract. Batch is large (≤500 events) so the per-call
+  // limit is intentionally low; the volume is in the event count, not calls.
+  'events.batch': { limit: 60, windowSeconds: 3600 },
 };
 
 export function rateLimit(category: string) {
