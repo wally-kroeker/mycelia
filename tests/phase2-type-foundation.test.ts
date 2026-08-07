@@ -106,7 +106,9 @@ let agents: SeededAgents;
 beforeEach(async () => {
   env = createTestEnv();
   applyMigrationsSync(env); // seeds eval-surface caps (0001) + ops-bus/lifecycle caps (0006)
-  agents = await seedAgents(env);
+  // Phase 3: seed with trusted tier so fleet-mode ops-bus tests pass the two-gate check.
+  // Community mode tests are unaffected (mode gate fires before tier check).
+  agents = await seedAgents(env, { tier: 'trusted' });
 });
 
 // ── exit criteria ─────────────────────────────────────────────────────────────
@@ -141,7 +143,7 @@ describe('Phase 2 — ops-bus type mode gate', () => {
     expect(res.status).toBe(403);
     const body = await res.json() as { error: { code: string; message: string } };
     expect(body.error.code).toBe('FORBIDDEN');
-    expect(body.error.message).toContain('fleet or company mode');
+    expect(body.error.message).toContain('ops-bus type');
   });
 
   // fleet mode: scope_claim required — pass actual agentId

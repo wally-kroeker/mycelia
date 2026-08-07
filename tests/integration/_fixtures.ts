@@ -13,11 +13,11 @@ import migration0004 from '../../migrations/0004_rate_limits_d1.sql?raw';
 import migration0005 from '../../migrations/0005_tier_rename_personal_sealed.sql?raw';
 import migration0006 from '../../migrations/0006_widen_request_type_ops_bus.sql?raw';
 import migration0007 from '../../migrations/0007_add_structured_coordination_fields.sql?raw';
+import migration0008 from '../../migrations/0008_agent_tier.sql?raw';
 import { createD1Test, D1Adapter } from './_d1-adapter';
 
-// All seven migrations applied in sequence. Phase 2 adds migrations 0006 and 0007;
-// migration0002 is now on main (no longer a stub).
-const MIGRATIONS = [migration0001, migration0002, migration0003, migration0004, migration0005, migration0006, migration0007];
+// All eight migrations applied in sequence. Phase 3 adds migration 0008 (agent_tier).
+const MIGRATIONS = [migration0001, migration0002, migration0003, migration0004, migration0005, migration0006, migration0007, migration0008];
 
 export function createMockKV() {
   const store = new Map<string, string>();
@@ -72,7 +72,10 @@ export interface SeededAgents {
   responderKey: string;
 }
 
-export async function seedAgents(env: TestEnv): Promise<SeededAgents> {
+export async function seedAgents(
+  env: TestEnv,
+  options: { tier?: 'peer' | 'trusted' } = {}
+): Promise<SeededAgents> {
   const requesterId = 'agent-requester-' + crypto.randomUUID();
   const responderId = 'agent-responder-' + crypto.randomUUID();
   const requesterKey = 'mycelia_live_' + 'a'.repeat(64);
@@ -85,15 +88,16 @@ export async function seedAgents(env: TestEnv): Promise<SeededAgents> {
   const requesterPrefix = requesterKey.substring(0, 21);
   const responderPrefix = responderKey.substring(0, 21);
   const ts = new Date().toISOString();
+  const tier = options.tier ?? 'peer';
 
   for (const [id, prefix, hash] of [
     [requesterId, requesterPrefix, requesterHash],
     [responderId, responderPrefix, responderHash],
   ]) {
     await env.DB.prepare(
-      `INSERT INTO agents (id, name, owner_id, api_key_hash, key_prefix, trust_score, status, created_at, last_seen_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(id, 'test-agent-' + id.slice(-8), 'owner-test', hash, prefix, 0.7, 'active', ts, ts).run();
+      `INSERT INTO agents (id, name, owner_id, api_key_hash, key_prefix, trust_score, status, agent_tier, created_at, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, 'test-agent-' + id.slice(-8), 'owner-test', hash, prefix, 0.7, 'active', tier, ts, ts).run();
   }
 
   return { requesterId, requesterKey, responderId, responderKey };

@@ -29,6 +29,8 @@ export interface Agent {
   trust_score_as_helper: number;
   trust_score_as_requester: number;
   status: AgentStatus;
+  // v1.3 — tier axis (Phase 3). Added by migration 0008.
+  agent_tier: AgentTier;
   request_count: number;
   response_count: number;
   created_at: string;
@@ -36,6 +38,12 @@ export interface Agent {
 }
 
 export type AgentStatus = 'active' | 'suspended' | 'deactivated';
+
+// v1.3 — agent tier axis for ops-bus two-gate enforcement (Phase 3).
+// 'peer'    — default for all newly registered agents.
+// 'trusted' — node-operator promotion; required to post ops-bus request types
+//             on fleet/company nodes (second gate after the mode gate from Phase 2).
+export type AgentTier = 'peer' | 'trusted';
 
 export interface Capability {
   id: number;
@@ -313,6 +321,11 @@ export interface PaginatedResult<T> {
 
 export interface AuthContext {
   agent_id: string;
-  key_type: 'agent' | 'observer';
+  // key_type: 'observer' removed in Phase 3 (fleet-coordination-v1).
+  // Observer key prefix was vestigial — no route called generateApiKey('observer'),
+  // and observer-prefixed keys 401 on lookup. Dead type narrowing cleaned up.
+  key_type: 'agent';
   owner_id: string;
+  // v1.3 — loaded at auth time (Phase 3). Avoids a second DB query at enforcement points.
+  agent_tier: AgentTier;
 }

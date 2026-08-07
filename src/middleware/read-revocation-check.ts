@@ -13,15 +13,15 @@
 //     a public community node for all non-revoked agents). This is the only
 //     mode-conditional behavior. The fail-open on KV error is already implemented
 //     inside checkRevocationWithMode — no separate community branch is needed here.
-//   observer keys: pass through (observer keys are rejected by authMiddleware before
-//     this middleware runs — no agents row → 401). Branch is unreachable; kept for
-//     explicit documentation of intent. See observer key deprecation in Phase 3.
 //
-// Note: isReadRevocationEnforced() from fleet-gate.ts is intentionally NOT called here.
-// That function returns false for community mode and was the wrong abstraction — it
-// conflated "should we check revocation?" with "what do we do on KV error?". Only
-// the second question is mode-conditional. isReadRevocationEnforced() is marked for
-// removal in Phase 3 cleanup.
+// Phase 3 cleanups applied here:
+//   - Observer key branch removed (Phase 3 observer deprecation). Observer keys now
+//     return 401 from authMiddleware before this middleware runs (no agents row for
+//     the mycelia_obs_ prefix). The branch was already unreachable.
+//   - isReadRevocationEnforced() from fleet-gate.ts removed (dead code). That function
+//     returned false for community mode and conflated "should we check?" with "what do
+//     we do on KV error?". The check itself runs in all modes; only the error behavior
+//     is mode-conditional, handled inside checkRevocationWithMode.
 
 import type { Context, Next } from 'hono';
 import type { Env, AuthContext } from '../types';
@@ -37,13 +37,6 @@ export async function readRevocationCheck(
 ): Promise<Response | void> {
   const mode = (c.env.MODE ?? 'community') as NodeMode;
   const auth = c.get('auth');
-
-  // observer keys cannot pass authMiddleware (no agents row → 401 before we run).
-  // Pass through here for explicit documentation; this branch is unreachable until
-  // Phase 3 formally removes observer key support.
-  if (auth.key_type === 'observer') {
-    return next();
-  }
 
   try {
     const result: RevocationResult = await checkRevocationWithMode(c.env.KV, auth.agent_id, mode);

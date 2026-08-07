@@ -48,7 +48,7 @@ admin.post('/agents/:id/rotate-key', async (c) => {
   }
 
   const oldPrefix = agent.key_prefix;
-  const { key, hash, prefix } = await generateApiKey('agent');
+  const { key, hash, prefix } = await generateApiKey();
 
   await c.env.DB.prepare(
     'UPDATE agents SET api_key_hash = ?, key_prefix = ? WHERE id = ?'

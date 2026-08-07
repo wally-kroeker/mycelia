@@ -11,7 +11,7 @@ import {
   isScopeClaimEnforced,
   isFeedScoped,
   isKvFailClosed,
-  isReadRevocationEnforced,
+  isOpsBusAllowed,
   registrationGate,
   checkRevocationWithMode,
   type NodeMode,
@@ -104,17 +104,30 @@ describe('isKvFailClosed — KV error handling', () => {
   });
 });
 
-// ═══ Feature matrix — read revocation enforcement ════════════════════════════
+// ═══ Feature matrix — ops-bus gate (Phase 3: two-gate check) ════════════════
 
-describe('isReadRevocationEnforced — read-bypass gap', () => {
-  it('fleet: reads enforce revocation', () => {
-    expect(isReadRevocationEnforced('fleet')).toBe(true);
+// isReadRevocationEnforced() was removed in Phase 3 (dead code — the read
+// revocation check runs in all modes; only the KV-error behavior is conditional).
+// These tests cover isOpsBusAllowed() which replaced the Phase 2 inline mode check.
+
+describe('isOpsBusAllowed — ops-bus two-gate (mode + agent_tier)', () => {
+  it('community + peer: blocked (mode gate)', () => {
+    expect(isOpsBusAllowed('community', 'peer')).toBe(false);
   });
-  it('company: reads enforce revocation', () => {
-    expect(isReadRevocationEnforced('company')).toBe(true);
+  it('community + trusted: blocked (mode gate wins)', () => {
+    expect(isOpsBusAllowed('community', 'trusted')).toBe(false);
   });
-  it('community: reads skip revocation check (current behavior)', () => {
-    expect(isReadRevocationEnforced('community')).toBe(false);
+  it('fleet + peer: blocked (tier gate)', () => {
+    expect(isOpsBusAllowed('fleet', 'peer')).toBe(false);
+  });
+  it('fleet + trusted: allowed (both gates pass)', () => {
+    expect(isOpsBusAllowed('fleet', 'trusted')).toBe(true);
+  });
+  it('company + peer: blocked (tier gate)', () => {
+    expect(isOpsBusAllowed('company', 'peer')).toBe(false);
+  });
+  it('company + trusted: allowed (both gates pass)', () => {
+    expect(isOpsBusAllowed('company', 'trusted')).toBe(true);
   });
 });
 

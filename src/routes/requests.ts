@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, AuthContext, CreateRequestInput, RequestType, Priority } from '../types';
 import { authMiddleware, requireAgentKey } from '../middleware/auth';
-import { isScopeClaimEnforced, type NodeMode } from '../middleware/fleet-gate';
+import { isScopeClaimEnforced, isOpsBusAllowed, type NodeMode } from '../middleware/fleet-gate';
 import type { ActionRequired } from '../types';
 import { writeAuditLog } from '../lib/audit';
 import { parsePagination, paginatedQuery } from '../lib/db';
@@ -73,22 +73,21 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
     return c.json(error('VALIDATION_ERROR', `request_type must be one of: ${validTypes.join(', ')}`, 400).body, 400);
   }
 
-  // Ops-bus gate (Phase 2: mode only; Phase 3 will add agent_tier check).
+  // Ops-bus gate — two-gate check (Phase 3: mode + agent_tier).
   // Lifecycle types (ack-close, abandon) are universally available — no gate.
   if (OPS_BUS_TYPES.includes(input.request_type)) {
     const requestMode = (c.env.MODE ?? 'community') as NodeMode;
-    if (requestMode === 'community') {
+    const agentTier = auth.agent_tier;
+    if (!isOpsBusAllowed(requestMode, agentTier)) {
+      const modeMsg = requestMode === 'community'
+        ? 'Community nodes do not serve ops-bus request types.'
+        : `On this node (MODE=${requestMode}), ops-bus request types require agent_tier=trusted. ` +
+          `Your agent is tier=${agentTier}. Contact the node operator to be promoted.`;
       return c.json(
-        error(
-          'FORBIDDEN',
-          `request_type=${input.request_type} requires fleet or company mode. ` +
-          `Community nodes use peer request types and lifecycle types only.`,
-          403
-        ).body,
+        error('FORBIDDEN', `request_type=${input.request_type} is an ops-bus type. ${modeMsg}`, 403).body,
         403
       );
     }
-    // Tier check (agent_tier in AuthContext) will be added in Phase 3.
   }
 
   // Validate priority

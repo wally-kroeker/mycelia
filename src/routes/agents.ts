@@ -121,7 +121,7 @@ agents.post('/', requireAgentKey, rateLimit('agent.register'), async (c) => {
   }
 
   const id = generateId();
-  const { key, hash, prefix } = await generateApiKey('agent');
+  const { key, hash, prefix } = await generateApiKey();
   const timestamp = now();
 
   // Insert agent

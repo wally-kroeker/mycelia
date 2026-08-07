@@ -11,7 +11,7 @@
 //   community — open/public; full trust system load-bearing (default, backward-compat).
 
 import type { Context, Next } from 'hono';
-import type { Env, AuthContext } from '../types';
+import type { Env, AuthContext, AgentTier } from '../types';
 import { checkRevoked, type RevocationEntry } from '../lib/revocation';
 
 export type NodeMode = 'fleet' | 'company' | 'community';
@@ -88,13 +88,18 @@ export function isKvFailClosed(mode: NodeMode): boolean {
 }
 
 /**
- * Read revocation enforcement — true if read-only routes (GET) must also
- * honor revocation checks, closing the "read-bypass" gap where revoked
- * agents can still read data.
- * fleet + company = private nodes where revocation is a real security control.
+ * Ops-bus allowed — true if the requesting agent may post ops-bus request types.
+ *
+ * Two-gate check (Phase 3):
+ *   Gate 1: mode — fleet or company only. Community nodes always block ops-bus.
+ *   Gate 2: agent_tier — 'trusted' required. Newly registered 'peer' agents cannot
+ *            post ops-bus types even on fleet/company nodes until promoted by the operator.
+ *
+ * Both gates must pass. Either gate failing returns false.
  */
-export function isReadRevocationEnforced(mode: NodeMode): boolean {
-  return mode === 'fleet' || mode === 'company';
+export function isOpsBusAllowed(mode: NodeMode, agentTier: AgentTier): boolean {
+  if (mode === 'community') return false;
+  return agentTier === 'trusted';
 }
 
 // ═══ Middleware ════════════════════════════════════════════════════════════════
