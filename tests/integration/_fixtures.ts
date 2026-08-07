@@ -14,10 +14,12 @@ import migration0005 from '../../migrations/0005_tier_rename_personal_sealed.sql
 import migration0006 from '../../migrations/0006_widen_request_type_ops_bus.sql?raw';
 import migration0007 from '../../migrations/0007_add_structured_coordination_fields.sql?raw';
 import migration0008 from '../../migrations/0008_agent_tier.sql?raw';
+import migration0009 from '../../migrations/0009_lifecycle_mechanics.sql?raw';
 import { createD1Test, D1Adapter } from './_d1-adapter';
 
-// All eight migrations applied in sequence. Phase 3 adds migration 0008 (agent_tier).
-const MIGRATIONS = [migration0001, migration0002, migration0003, migration0004, migration0005, migration0006, migration0007, migration0008];
+// All nine migrations applied in sequence.
+// Phase 3 adds migration 0008 (agent_tier). Phase 4 adds migration 0009 (lifecycle mechanics).
+const MIGRATIONS = [migration0001, migration0002, migration0003, migration0004, migration0005, migration0006, migration0007, migration0008, migration0009];
 
 export function createMockKV() {
   const store = new Map<string, string>();

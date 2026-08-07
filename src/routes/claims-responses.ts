@@ -11,7 +11,7 @@ import { isTrustGateRelaxed, type NodeMode } from '../middleware/fleet-gate';
 import { rateLimit } from '../middleware/rate-limit';
 import { writeAuditLog } from '../lib/audit';
 import { success, error, generateId, now } from '../lib/utils';
-import { afterClaimCreated, afterResponseSubmitted } from '../models/state-machine';
+import { afterClaimCreated, afterResponseSubmitted, claimAfterAbandon } from '../models/state-machine';
 
 const claimsResponses = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
 
@@ -398,6 +398,106 @@ claimsResponses.post('/:id/responses', rateLimit('response.create'), async (c) =
       },
     }),
     201
+  );
+});
+
+// ─── DELETE /:id/claims/:claim_id — abandon a claim ─────────────────────────
+//
+// A claimant who cannot proceed signals abandonment. The claim transitions to
+// 'abandoned' and, if no other active claims remain, the request reverts to
+// 'open' so another agent can pick it up.
+//
+// Constraints:
+//   - Only the agent that holds the claim can abandon it.
+//   - The claim must be in 'active' status (not expired, abandoned, completed).
+//   - The request must not already have responses (can't abandon a responded request).
+
+claimsResponses.delete('/:id/claims/:claim_id', rateLimit('claim.create'), async (c) => {
+  const auth = c.get('auth');
+  const requestId = c.req.param('id');
+  const claimId = c.req.param('claim_id');
+
+  // Load claim — verify it belongs to this agent and is on the stated request
+  const claim = await c.env.DB.prepare(
+    `SELECT id, agent_id, request_id, status FROM claims
+     WHERE id = ? AND request_id = ?`
+  ).bind(claimId, requestId).first<{
+    id: string;
+    agent_id: string;
+    request_id: string;
+    status: string;
+  }>();
+
+  if (!claim) {
+    return c.json(error('NOT_FOUND', 'Claim not found on this request', 404).body, 404);
+  }
+  if (claim.agent_id !== auth.agent_id) {
+    return c.json(error('FORBIDDEN', 'You can only abandon your own claims', 403).body, 403);
+  }
+  if (claim.status !== 'active') {
+    return c.json(
+      error('CONFLICT', `Cannot abandon a claim in status '${claim.status}'. Must be 'active'.`, 409).body,
+      409
+    );
+  }
+
+  // Load request to check response_count and determine next status
+  const request = await c.env.DB.prepare(
+    'SELECT id, status, response_count FROM requests WHERE id = ?'
+  ).bind(requestId).first<{ id: string; status: string; response_count: number }>();
+
+  if (!request) {
+    return c.json(error('NOT_FOUND', 'Request not found', 404).body, 404);
+  }
+
+  const abandonedAt = now();
+  const newClaimStatus = claimAfterAbandon();  // → 'abandoned'
+
+  // After marking this claim abandoned, check if any other active claims remain.
+  // We do the claim UPDATE first (in batch) then check remaining count.
+  // If no active claims remain AND response_count=0, revert request to 'open'.
+  const remainingClaims = await c.env.DB.prepare(
+    `SELECT COUNT(*) as count FROM claims
+     WHERE request_id = ? AND status = 'active' AND id != ?`
+  ).bind(requestId, claimId).first<{ count: number }>();
+
+  const shouldReopen =
+    request.response_count === 0 &&
+    (remainingClaims?.count ?? 0) === 0;
+
+  const batchStatements = [
+    c.env.DB.prepare(
+      `UPDATE claims SET status = ?, completed_at = ? WHERE id = ?`
+    ).bind(newClaimStatus, abandonedAt, claimId),
+  ];
+
+  if (shouldReopen) {
+    batchStatements.push(
+      c.env.DB.prepare(
+        `UPDATE requests SET status = 'open', updated_at = ? WHERE id = ?`
+      ).bind(abandonedAt, requestId)
+    );
+  }
+
+  await c.env.DB.batch(batchStatements);
+
+  await writeAuditLog(c.env.DB, c.env.KV, {
+    event_type: 'claim.abandoned',
+    actor_id: auth.agent_id,
+    target_type: 'claim',
+    target_id: claimId,
+    detail: {
+      request_id: requestId,
+      request_reopened: shouldReopen,
+    },
+  });
+
+  return c.json(
+    success({
+      claim: { id: claimId, status: newClaimStatus },
+      request: { id: requestId, status: shouldReopen ? 'open' : request.status },
+    }),
+    200
   );
 });
 

@@ -170,7 +170,7 @@ async function computeStats(db: D1Database): Promise<FeedStats> {
     db.prepare(`SELECT COUNT(*) as count FROM requests`).first<{ count: number }>(),
     db.prepare(`SELECT COUNT(*) as count FROM requests WHERE status = 'open'`).first<{ count: number }>(),
     db.prepare(`SELECT COUNT(*) as count FROM responses`).first<{ count: number }>(),
-    db.prepare(`SELECT AVG(score) as avg FROM ratings`).first<{ avg: number | null }>(),
+    db.prepare(`SELECT AVG(score) as avg FROM ratings WHERE cross_owner = 1 AND score IS NOT NULL`).first<{ avg: number | null }>(),
     db.prepare(`
       SELECT c.tag, COUNT(*) as request_count
       FROM request_tags rt

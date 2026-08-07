@@ -33,6 +33,9 @@ const REQUEST_TRANSITIONS: TransitionRule[] = [
   { from: 'responded', to: 'rated', trigger: 'rating_submitted' },
   { from: 'rated', to: 'rated', trigger: 'additional_rating' },
   { from: 'rated', to: 'closed', trigger: 'all_rated_or_manual_close' },
+  // v1.3 — ack-close: requester acknowledges receipt without going through rate flow.
+  // Terminal state; auto-creates a rating row (score optional).
+  { from: 'responded', to: 'ack-closed', trigger: 'requester_ack_closes' },
 ];
 
 /**
