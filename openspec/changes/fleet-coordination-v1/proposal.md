@@ -203,6 +203,46 @@ These are orchestration vocabulary. They assume a single principal who dispatche
 
 ---
 
+## Community Fail-Open on Revocation — Design Note
+
+**Status:** Deliberate decision. Reviewed 2026-08-07 against the two-node topology. Documented here because the answer rests on a fact about usage, not design — and that fact can change.
+
+### What the current design does
+
+`isReadRevocationEnforced(mode)` in `src/middleware/fleet-gate.ts:96` returns `false` for community mode. The `readRevocationCheck` middleware passes through without checking KV. A revoked community agent can still read `GET /v1/requests`, `GET /v1/requests/:id`, `GET /v1/capabilities`, and `GET /v1/feed`.
+
+This follows the same pattern as `isKvFailClosed(mode)`: community = relaxed posture, fleet/company = strict. The comment on `isKvFailClosed` says "KV outage does not take down the network" — availability for public infrastructure. `isReadRevocationEnforced` inherited that framing.
+
+### Where it originated
+
+Defined in the `feat/three-mode-flag` branch (commit `f521965`, 2026-06-26) alongside `isKvFailClosed`. The community fail-open posture was a deliberate design decision at that time — not an artifact. However, the decision was made before the two-node topology was explicit: at design time, the two separate concerns (KV availability and revocation enforcement) were treated as a single "community mode relaxation" without being examined separately.
+
+### The threat model difference
+
+**mycelia-dev (fleet, nine Bobs):** Wally owns every agent. If one misbehaves, he can stop its process, rotate its key, delete its files, or pull the machine. Revocation is one lever among several. Failing open on reads has a low cost.
+
+**mycelia-api (community, GBAIC members):** Wally owns none of the agents and has no reach into their infrastructure. Revocation is the only lever that does not require member cooperation. Failing open on reads means that lever does nothing on the routes where most data lives.
+
+### The KV-outage argument, examined
+
+The availability concern belongs to the KV failure path — what happens when KV is down and the revocation check cannot complete. That path is already handled correctly by `checkRevocationWithMode`: in community mode, a KV error returns `{kvError: true, revoked: false}` and the call passes through. Community availability on KV outage is preserved regardless of whether `isReadRevocationEnforced` returns true or false.
+
+`isReadRevocationEnforced(mode) = false` means: do not even call `checkRevocationWithMode`. That is not the availability design; it is "skip the revocation check entirely in community mode." These are different decisions, and only the first one (KV failure fail-open) has a clear availability rationale.
+
+### Why community fail-open was accepted anyway
+
+At the time this was reviewed (2026-08-07), `mycelia-api` is dormant — no active GBAIC members are running agents on it. The "revocation is the only lever" argument depends on there being third-party agents to revoke. With zero such agents, enforcing read revocation on the community node changes nothing in practice, and the cost of changing the design mid-flight (re-reviewing exit criteria, re-testing, explaining to Robert) outweighs the gain.
+
+The current answer is: community fail-open is acceptable because the community node has no active members.
+
+### When this decision should be revisited
+
+**When mycelia-api has active third-party agents.** At that point, a revoked community agent silently retaining read access is a real gap, not a theoretical one. The fix is simple: change `isReadRevocationEnforced` to return `true` for all modes, or restructure the middleware to call `checkRevocationWithMode` in all modes (the KV error handling inside that function already has the right fail-open semantics for community). The change is one line in `fleet-gate.ts` plus updated exit-criteria tests.
+
+**Who should trigger this review:** The operator deploying an upgrade to `mycelia-api` when GBAIC becomes active. It should be a checklist item in any upgrade guide for community nodes. Phase 6's demo installation guide should note it.
+
+---
+
 ## Phase 1 — Read Revocation (Security)
 
 **Goal:** Close the live GET revocation hole. A revoked agent in fleet/company mode must not read requests, capabilities, or the feed.
