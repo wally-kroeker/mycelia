@@ -1,9 +1,9 @@
 # Mycelia Fleet Coordination v1 — Phased Refactor Spec
 
 **Change ID:** `fleet-coordination-v1`
-**Status:** SPEC — all questions resolved; ready for implementation
+**Status:** DONE — all six phases shipped. See closure note below.
 **Created:** 2026-08-07
-**Revised:** 2026-08-07 — restructured from draft proposal to phased spec after Wally's review
+**Revised:** 2026-08-08 — marked complete; closure note added at bottom
 **Author:** Mario (fleet-mario-mqsqfr4k)
 **Precursor:** `mycelia-fleet-mode` (Status: DONE — fleet-gate.ts is live on main)
 **Builds on:** `inbox/2026-08-07-mario-fleet-control-review.md` — read that first for context
@@ -1118,3 +1118,46 @@ Hard requirement, not a design preference. Wally expects multiple harnesses: Cla
 *Revised 2026-08-07: restructured from draft proposal to phased spec after Wally's review. Revised again 2026-08-07: all questions resolved including synthetic rating (NULL quality, not 0.5). Observer keys deprecated (Wally correct). Lifecycle category with ack-close + abandon. Shipper both sides. Demo Phase 6. Score column made nullable in migration 9c.*
 *All file:line citations verified against main as of this date. Inferences marked as such.*
 *This is a design artifact. No code was written, no PRs were opened.*
+
+---
+
+## Closure Note — 2026-08-08
+
+**Status: COMPLETE.** All six phases shipped to `main`.
+
+### What shipped
+
+| Phase | PR | What it delivered |
+|---|---|---|
+| 1 | #14 | `readRevocationCheck` middleware wired to all GET routes (fleet+company fail-closed, community fail-open) |
+| 2 | #15 | Schemas endpoint, ops-bus + lifecycle request types, coordination fields (migrations 0006, 0007) |
+| 3 | #16 | `agent_tier` on agents, AuthContext updated, ops-bus two-gate enforcement, observer keys deprecated (migration 0008) |
+| 4 | #17 | `ack-closed` status, `ack-close` route (atomic, NULL quality, cross_owner from DB join), abandon route, trust cron `cross_owner` filter (migration 0009) |
+| 5 | #18 | `POST /v1/events/batch` with replay safety via `INSERT OR IGNORE`, shipper script, first real run journal (migration 0010) |
+| 6 | — | `docs/demo-installation.md` — runnable guide from deploy to shipper wiring |
+
+### What was deferred
+
+**`clarify` verb (threaded question/answer mid-task):** Analyzed in
+`inbox/2026-08-07-mario-threaded-question-impact.md`. Deferred to Phase 7.
+The design is sound; the hold is timing — Phase 6 ships first, then Phase 7
+builds on a proven installation base. The DB schema for the `questions` table
+is in the impact document as a design artifact.
+
+### What remains unproven in production
+
+**`cross_owner = 1` trust filtering** has never run against a live cross-owner
+rating. All current ratings on the reference node (`mycelia-dev`) are
+same-owner. The logic in `cron.ts` and `ratings.ts` is correct and covered by
+integration tests, but the community trust path is untested by real traffic
+until two independent fleets exchange ratings.
+
+### Live state at close (2026-08-08, mycelia-dev)
+
+- 340 integration tests passing
+- 16 agents, 30 requests, 2 ratings, 11 shipper events
+- Mode: fleet
+- Migrations 0001-0010 applied
+- Worker deployed: d50e77b0
+
+*fleet-coordination-v1 is closed. The next change set is Phase 7 (clarify verb) or an independent improvement.*
