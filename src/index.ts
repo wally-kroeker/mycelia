@@ -15,6 +15,7 @@ import ratings from './routes/ratings';
 import feed from './routes/feed';
 import admin from './routes/admin';
 import schemas from './routes/schemas';
+import events from './routes/events';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -50,6 +51,7 @@ app.route('/v1/responses', ratings);          // ratings nest under /v1/response
 app.route('/v1/feed', feed);
 app.route('/v1/admin', admin);
 app.route('/v1/schemas', schemas);        // Self-describing endpoint body shapes
+app.route('/v1/events', events);          // Phase 5 — shipper contract event ingestion
 
 // 404 handler
 app.notFound((c) => c.json({

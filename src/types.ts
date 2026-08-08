@@ -323,6 +323,58 @@ export interface ProposeTagInput {
   description: string;
 }
 
+// ═══ Phase 5 — Shipper Contract (v1.4) ═══════════════════════════════════════
+//
+// A controlling-agent shipper forwards semantic events from its run journal
+// (~/.bobs/<bob>/runs/<run-id>.jsonl) to Mycelia via POST /v1/events/batch.
+// Event ingestion is idempotent on journal_event_id = "<run_id>:<seq>".
+// See AGENT-CONTRACT-v1.md §4, §6.
+
+export interface ShipperEvent {
+  // seq: monotonic within the run, from the journal line.
+  seq: number;
+  // t: ISO 8601 UTC timestamp from the journal line.
+  t: string;
+  // bob: agent name ("mario", "riker", etc.) — metadata, not a trust anchor.
+  // The trust anchor is the API key used to authenticate the batch.
+  bob: string;
+  // planet: which project planet this event concerns. Optional.
+  planet?: string;
+  // ev: event type — opaque to Mycelia. See AGENT-CONTRACT-v1.md §4.3.
+  // tool.call events are skipped by the shipper; only semantic events land here.
+  ev: string;
+  // v: event-specific payload — opaque JSON blob. Stored as a JSON string.
+  v?: unknown;
+}
+
+export interface ShipBatchInput {
+  // run_id: the guid8 run identifier. Becomes part of journal_event_id.
+  run_id: string;
+  // events: ≤500 events per call. Each must have a unique seq within the batch.
+  events: ShipperEvent[];
+}
+
+export interface ShipBatchResult {
+  // accepted: number of new rows inserted (seq not previously seen).
+  accepted: number;
+  // skipped: number of rows already present (idempotency — replay is safe).
+  skipped: number;
+}
+
+export interface ShipperEventRow {
+  id: string;
+  journal_event_id: string;
+  run_id: string;
+  seq: number;
+  bob: string;
+  planet: string | null;
+  event_type: string;
+  payload: string | null;
+  t: string;
+  received_at: string;
+  agent_id: string;
+}
+
 // ═══ Pagination ═══
 
 export interface PaginationParams {
