@@ -121,7 +121,7 @@ requests.post('/', requireAgentKey, rateLimit('request.create'), async (c) => {
       'SELECT id FROM capabilities WHERE tag = ?'
     ).bind(tag).first<{ id: number }>();
     if (!cap) {
-      return c.json(error('VALIDATION_ERROR', `Unknown tag: ${tag}. Valid tags: GET /v1/capabilities. Body shapes: GET /v1/schemas/request_create`, 400).body, 400);
+      return c.json(error('VALIDATION_ERROR', `Unknown capability tag: "${tag}". Note: 'tags' takes capability names (e.g. "code-review", "debug-help") — not request_type values (e.g. "review", "fact-check"). See GET /v1/capabilities for valid tags.`, 400).body, 400);
     }
     capabilityIds.push(cap.id);
   }
