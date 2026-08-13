@@ -22,3 +22,7 @@ scripts/bootstrap-test-agents.ts
 
 # AI session instructions — operator-specific, not for public repo
 CLAUDE.md
+
+# Fleet work queue — agent ids, task ids, run ids, note bodies.
+# Machine state belonging to whoever operates this node, not a project artifact.
+.agents/
